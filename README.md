@@ -44,14 +44,107 @@ make smoke
 make db-up && make ingest
 ```
 
-With an `ANTHROPIC_API_KEY` set you can hit the real router end to end:
+---
+
+## What you can do right now
+
+The build is phased, but the shipped parts are fully runnable on your laptop without any cloud credentials.
+
+### 1. Run the full lifecycle pipeline end-to-end (offline)
 
 ```bash
+python -m scripts.demo_lifecycle
+```
+
+Runs the real lifecycle orchestrator against the real 8-playbook RAG corpus, a `FakeMcpClient` returning realistic BigQuery rows, and a canned Sonnet synthesis — so you can see the actual `LifecycleOutput` JSON without hitting any external service.
+
+<details><summary>Abridged output</summary>
+
+```json
+{
+  "signal_id": "golden-aha-001",
+  "enrichment": {
+    "user_context": {
+      "user_id": "user-aha-001",
+      "plan": "free",
+      "lifecycle_stage": "activated",
+      "company": "Lattice Loop",
+      "recent_event_types": [
+        "dashboard_created", "alert_configured",
+        "integration_added", "invite_sent"
+      ]
+    },
+    "playbooks": [
+      {"playbook_slug": "invite-momentum",        "score": 0.192, "section": "Trigger"},
+      {"playbook_slug": "trial-expiring-dormant", "score": 0.192, "section": "Trigger"},
+      {"playbook_slug": "aha-moment-free-user",   "score": 0.183, "section": "Guardrails"}
+    ],
+    "current_campaigns": [],
+    "partial": false
+  },
+  "draft": {
+    "signal_id": "golden-aha-001",
+    "user_id": "user-aha-001",
+    "audience_segment": "free_activated_today",
+    "channel": "email",
+    "subject": "You just wired the exact pattern our best teams use",
+    "body_markdown": "In the last hour you set up a dashboard, wired an alert, added an integration, and invited a teammate...",
+    "call_to_action": "Share your dashboard",
+    "playbook_slug": "aha-moment-free-user",
+    "rationale": "aha-moment + invite momentum; playbook emphasises inviter recognition."
+  },
+  "latency_ms": 2
+}
+```
+
+</details>
+
+### 2. See the OTel trace shape
+
+The same run emits this span tree to stdout (via the `ConsoleSpanExporter` when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset):
+
+```
+lifecycle.run                         ← root; signal_id, user_id, latency_ms
+├── lifecycle.enrich                  ← parallel fan-out parent
+│   ├── lifecycle.bq.user_context
+│   ├── lifecycle.rag.retrieve
+│   │   └── rag.retrieve              ← rag.hits=3, rag.top_playbooks=[...]
+│   └── lifecycle.cio.current_campaigns
+├── anthropic.structured_output       ← gen_ai.* semconv + prompt/completion events
+│     gen_ai.system=anthropic
+│     gen_ai.request.model=claude-sonnet-4-5
+│     gen_ai.usage.input_tokens=120
+│     gen_ai.usage.output_tokens=40
+│     grafanagent.cost_usd=0.00096
+└── lifecycle.cio.create_draft
+```
+
+Every rung of the router fallback chain, every MCP tool call, and every LLM call emits a span with the same `gen_ai.*` semantic conventions — Phase 6 wires these into a Grafana dashboard, but they're already visible today.
+
+### 3. Hit the router over HTTP with a real Anthropic key
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
 uvicorn agents.router.app:create_app --factory --reload
+
 curl -s -X POST localhost:8000/signal -H 'content-type: application/json' -d '{
   "id":"golden-aha-001","type":"aha_moment_threshold","source":"cli","user_id":"user-aha-001"
 }' | jq
 ```
+
+Returns the real `RoutingDecision` from Claude Haiku plus the fallback `rung_used` and the list of models consulted.
+
+### 4. Probe the BigQuery MCP security layer
+
+```bash
+python -c "
+from mcp_servers.bigquery.security import validate_query, SecurityPolicy
+pol = SecurityPolicy.from_env()
+validate_query('DROP TABLE grafanagent_demo.users', pol)  # raises SecurityError
+"
+```
+
+The same guard rejects DML, unqualified tables, and disallowed datasets; PII columns are redacted from any rows returned to an agent.
 
 ---
 
