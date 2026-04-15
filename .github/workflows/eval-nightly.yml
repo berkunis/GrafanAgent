@@ -1,0 +1,45 @@
+name: Eval (nightly LLM judge)
+
+on:
+  schedule:
+    # 09:00 UTC daily — early enough that a regression is visible by start of
+    # business in EU/US before anyone ships new prompts.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  eval:
+    name: golden set — llm mode
+    runs-on: ubuntu-latest
+    # Only run in the canonical repo; forks without the Anthropic secret
+    # should not get a red cross on their schedule.
+    if: github.repository == 'berkunis/GrafanAgent'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Run golden eval (LLM judge, emit OTel metrics)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional — when set the runner pushes metrics to Grafana Cloud
+          # Mimir, which drives the regression alert rule in
+          # dashboards/alerts.json.
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.GRAFANA_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS:  ${{ secrets.GRAFANA_OTLP_HEADERS }}
+          OTEL_SERVICE_NAME: grafanagent-eval-nightly
+          OTEL_RESOURCE_ATTRIBUTES: deployment.environment=ci
+        run: |
+          grafanagent eval \
+            --mode llm \
+            --threshold 0.85 \
+            --concurrency 3 \
+            --emit-metrics \
+            --verbose
