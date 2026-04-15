@@ -7,9 +7,19 @@ GrafanAgent — a portfolio/interview project for a **Staff AI Engineer (AI & Au
 Demonstrate end-to-end ability to ship multi-agent AI systems on GCP that connect marketing/ops platforms (Customer.io, Salesforce, BigQuery, Slack), with **the Grafana LGTM stack as the AI observability layer** — that last bit is the differentiator.
 
 ## What's done
-- README.md with full pitch, architecture, stack, repo layout, demo flows
-- Repo scaffold committed (`c66ea12`): folders, shared OTel bootstrap, agent + MCP stubs, Terraform skeleton, Dockerfile template
-- Repo published at https://github.com/DigiFabAI/GrafanAgent
+- **All 9 phases shipped.** 154 Python tests + 17 TypeScript tests green; ruff clean.
+- Four working agents (router + lifecycle + lead_scoring + attribution) with explicit Haiku → Sonnet → rule → HITL fallback chain on the router, Sonnet synthesis on skill agents, parallel fan-out where it makes sense.
+- Three Python MCP servers (BigQuery read-only + PII-redacted, Customer.io sandbox-only idempotent, Slack proxy to Bolt app).
+- TypeScript Slack Bolt approval app with full state machine + Block Kit UI + edit modal.
+- RAG on pgvector + Vertex AI `text-embedding-004`, 12 hand-authored playbooks.
+- `grafanagent` CLI (trigger / replay / list / describe / eval).
+- Sonnet LLM-as-judge eval harness with Mimir metrics + Grafana regression alert + GitHub Actions CI + nightly workflow.
+- Cache-aware cost model + per-signal contextvars attribution + latency histogram + full OTel genai semconv.
+- Real Grafana dashboard (13 panels, 5 rows) + 6 alert rules with runbook links.
+- Full Terraform stack (Artifact Registry + Pub/Sub with DLQ + Secret Manager + reusable Cloud Run module + runtime SA with minimal IAM).
+- `make deploy` / `make seed` / `make smoke-remote` + multi-stage TS Dockerfile + production runbook.
+- LICENSE (MIT) + CONTRIBUTING.md + SECURITY.md + blog post + seed good-first-issues list.
+- Repo public at https://github.com/berkunis/GrafanAgent.
 
 ## MVP scope (JD-aligned, executes in 9 phases)
 
@@ -47,5 +57,7 @@ The full build plan lives at `~/.claude/plans/vast-swimming-bachman.md`. Phases 
 ## Working notes
 - User is Isil Berkun (founder of DigiFab.ai). Treat as senior engineer; skip basics, surface trade-offs.
 - Public repo — keep interview-strategy framing OUT of committed files. Pitch as a real project, not "an interview demo." `docs/role.md` is gitignored.
-- Build cadence: one phase at a time, commit + review between phases.
-- Original full plan (with interview-strategy sections) lives at `~/.claude/plans/eager-toasting-wadler.md`; current execution plan at `~/.claude/plans/vast-swimming-bachman.md`.
+- **Phases 0–9 complete.** The application-ready state.
+- Current plan file (phases + rationale): `~/.claude/plans/vast-swimming-bachman.md`.
+- Original brainstorm plan (with interview strategy): `~/.claude/plans/eager-toasting-wadler.md`.
+- Next meaningful work: actually deploying to GCP (requires user credentials), or follow-on PRs from `docs/FIRST_ISSUES.md` if inviting contributors.

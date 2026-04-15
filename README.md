@@ -1,8 +1,35 @@
 # GrafanAgent
 
+[![CI](https://github.com/berkunis/GrafanAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/berkunis/GrafanAgent/actions/workflows/ci.yml)
+[![Eval (nightly)](https://github.com/berkunis/GrafanAgent/actions/workflows/eval-nightly.yml/badge.svg)](https://github.com/berkunis/GrafanAgent/actions/workflows/eval-nightly.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)](pyproject.toml)
+[![Node 22](https://img.shields.io/badge/node-22-339933)](apps/slack-approver/package.json)
+[![Ruff](https://img.shields.io/badge/lint-ruff-orange)](https://github.com/astral-sh/ruff)
+[![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757)](https://www.anthropic.com/claude-code)
+
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> **Status: Phase 8 of 9 shipped.** Every agent, MCP server, and the Slack Bolt UI + **full Terraform stack (Artifact Registry + Pub/Sub with DLQ + Secret Manager + reusable Cloud Run module + runtime service account + IAM) + one-command `make deploy` / `make seed` / `make smoke-remote` + multi-stage Dockerfile for the TS app + production-grade runbook (bootstrap, secret population, first-time deploy, per-service redeploy, rollback, cost controls, teardown)** are all real, unit-tested (145 Python tests + 17 TypeScript tests, <1s total), and deploy-ready once credentials are wired. Remaining phase: narrative polish + OSS signal.
+> **Status: shipped.** All 9 phases complete. Every agent + MCP server + the Slack Bolt UI + the full Terraform deploy stack + a Sonnet-judge eval harness with Grafana regression alerts + a production runbook are real, unit-tested (147+ Python tests + 17 TypeScript tests, all <1s), and deployable to Cloud Run in one `make deploy` command.
+>
+> Read the companion blog post: [**Building production AI agents with the Grafana LGTM stack**](docs/blog/building-ai-agents-with-lgtm.md).
+
+## Contents
+
+- [Build status](#build-status)
+- [Quickstart](#quickstart-local-no-credentials-required)
+- [What you can do right now](#what-you-can-do-right-now) — runnable demos, no credentials
+- [The problem](#the-problem)
+- [Architecture](#architecture)
+- [Stack](#stack)
+- [Repository layout](#repository-layout)
+- [Demo flows](#demo-flows-mvp)
+- [Verification checklist](#verification-checklist)
+- [Design principles](#design-principles)
+- [Deploying](docs/runbook.md#deploy) — runbook covers GCP bootstrap, secrets, deploy, rollback, teardown
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [License](LICENSE)
 
 ---
 
@@ -19,9 +46,9 @@ A multi-agent marketing-ops copilot that turns product-usage signals into orches
 | 6 | Cache-aware cost model + per-signal attribution + latency histogram + genai semconv polish + real Grafana dashboard + 4 more alert rules + collector polish | ✅ shipped |
 | 7 | Lead-Scoring agent (conditional HITL) + Attribution agent (multi-touch report) + 4 new RAG playbooks + self-service skill-addition doc | ✅ shipped |
 | 8 | Terraform (Artifact Registry + Pub/Sub + Secret Manager + generic Cloud Run module) + deploy/seed/smoke-remote scripts + TS Dockerfile + production runbook | ✅ shipped |
-| 9 | DESIGN.md polish + CONTRIBUTING + write-up + OSS signal | ⏳ next |
+| 9 | DESIGN.md finalised + CONTRIBUTING + SECURITY + blog post + README polish + seed good-first-issues | ✅ shipped |
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the rationale behind each non-obvious choice.
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the rationale behind every non-obvious choice.
 
 ---
 
@@ -392,10 +419,37 @@ grafanagent/
 - **Sandbox the writes.** Real CRMs in dev = real outages.
 - **Built with Claude Code.** This repo is a working example of pragmatic AI-assisted development paired with strong code review.
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the rationale behind each non-obvious choice.
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the full rationale — 16 decisions with the reasoning and when we'd reconsider.
+
+---
+
+## Built with Claude Code
+
+Every commit in this repo's history ships with a `Co-Authored-By:` line crediting Claude. The authorship model is simple: every line of code has a human owner who read it, wrote the "why" in the commit message, and answers questions on the review. The JD at Grafana Labs explicitly encourages using AI to build AI — this repo is what that looks like when you apply real engineering discipline to both sides. The `git log` is a working artefact of the collaboration.
+
+---
+
+## Screenshots
+
+*Placeholders — add after first deployment to Grafana Cloud:*
+
+- `docs/img/dashboard-cost.png` — the cost row showing per-bucket breakdown + top-10 most expensive signals
+- `docs/img/dashboard-latency.png` — p50/p95/p99 by agent + success rate + error rate
+- `docs/img/dashboard-eval.png` — pass-rate gauge + judge score trendline + per-skill bar
+- `docs/img/tempo-span-drilldown.png` — clicking an `anthropic.structured_output` span to see the full prompt + completion
+- `docs/img/slack-approval-card.png` — the HITL Block Kit card with Approve / Reject / Edit buttons
+
+---
+
+## Contributing + security
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup, test loop, commit conventions
+- [`SECURITY.md`](SECURITY.md) — private disclosure policy and scope
+- [`docs/adding_a_new_skill.md`](docs/adding_a_new_skill.md) — 10-step template for adding a new agent
+- [`docs/FIRST_ISSUES.md`](docs/FIRST_ISSUES.md) — seed good-first-issues a new contributor can pick up
 
 ---
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 Isil Berkun
