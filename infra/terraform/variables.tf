@@ -26,3 +26,15 @@ variable "mcp_services" {
   type        = list(string)
   default     = ["bigquery", "customer-io", "slack"]
 }
+
+variable "bq_dataset_id" {
+  description = "BigQuery dataset id for the demo."
+  type        = string
+  default     = "grafanagent_demo"
+}
+
+variable "bq_location" {
+  description = "BigQuery dataset location."
+  type        = string
+  default     = "US"
+}

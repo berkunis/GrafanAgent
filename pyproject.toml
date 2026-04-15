@@ -20,6 +20,9 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "httpx>=0.27.0",
     "structlog>=24.4.0",
+    "tenacity>=9.0.0",
+    "sqlglot>=25.0.0",
+    "google-cloud-bigquery>=3.26.0",
     "opentelemetry-api>=1.28.0",
     "opentelemetry-sdk>=1.28.0",
     "opentelemetry-exporter-otlp>=1.28.0",
@@ -32,15 +35,15 @@ dependencies = [
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
+    "respx>=0.21.1",
     "ruff>=0.7.0",
     "mypy>=1.13.0",
 ]
-bigquery = ["google-cloud-bigquery>=3.26.0"]
 slack    = ["slack-sdk>=3.33.0"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agents*", "mcp_servers*", "observability*"]
+include = ["agents*", "mcp_servers*", "observability*", "rag*", "cli*", "evals*"]
 
 [tool.ruff]
 line-length = 100
