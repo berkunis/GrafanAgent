@@ -9,22 +9,10 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "image_repo" {
-  description = "Artifact Registry repo for service images."
+variable "image_tag" {
+  description = "Image tag every Cloud Run service pulls. Typically the short git SHA produced by `make deploy`."
   type        = string
-  default     = "grafanagent"
-}
-
-variable "agent_services" {
-  description = "Agent services deployed to Cloud Run."
-  type        = list(string)
-  default     = ["router", "lifecycle", "lead-scoring", "attribution"]
-}
-
-variable "mcp_services" {
-  description = "MCP servers deployed to Cloud Run."
-  type        = list(string)
-  default     = ["bigquery", "customer-io", "slack"]
+  default     = "latest"
 }
 
 variable "bq_dataset_id" {
@@ -40,7 +28,31 @@ variable "bq_location" {
 }
 
 variable "enable_cloudsql" {
-  description = "Create the Cloud SQL pgvector instance. Off by default so bare `terraform plan` works without the Secret Manager API enabled. Flip to true when deploying (Phase 8)."
+  description = "Create the Cloud SQL pgvector instance."
   type        = bool
   default     = false
+}
+
+variable "enable_deploy" {
+  description = "Create Artifact Registry + Secret Manager + Cloud Run + Pub/Sub resources. Off by default so the repo ships without hard requirements on those APIs; flip to true in your tfvars when Phase 8 credentials are wired."
+  type        = bool
+  default     = false
+}
+
+variable "attribution_post_channel" {
+  description = "Slack channel id the attribution agent posts RevOps reports to. Empty string disables posting."
+  type        = string
+  default     = ""
+}
+
+variable "slack_approval_channel" {
+  description = "Slack channel id the HITL approval cards post to."
+  type        = string
+  default     = ""
+}
+
+variable "otel_exporter_otlp_endpoint" {
+  description = "Grafana Cloud OTLP gateway, e.g. https://otlp-gateway-prod-us-east-0.grafana.net/otlp"
+  type        = string
+  default     = ""
 }

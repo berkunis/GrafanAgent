@@ -1,0 +1,20 @@
+# Keep the Python image build context lean.
+.git
+.venv
+apps/slack-approver/node_modules
+apps/slack-approver/dist
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+htmlcov
+.coverage
+docs/
+dashboards/
+infra/terraform/.terraform
+tests/
+scripts/
+*.md
+!README.md

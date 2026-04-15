@@ -2,7 +2,7 @@
 
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> **Status: Phase 7 of 9 shipped.** Router + BQ MCP + lifecycle agent + Customer.io MCP + RAG + TS Slack Bolt HITL + PII scrubber + `grafanagent` CLI + LLM-judge eval harness + CI + full Grafana dashboard + alert rules + **Lead-Scoring agent (priority-conditional HITL + conditional execution) + Attribution agent (structured report with multi-touch weights, posts to RevOps Slack)** are all real, unit-tested (131 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (deploy, narrative polish) land in sequence.
+> **Status: Phase 8 of 9 shipped.** Every agent, MCP server, and the Slack Bolt UI + **full Terraform stack (Artifact Registry + Pub/Sub with DLQ + Secret Manager + reusable Cloud Run module + runtime service account + IAM) + one-command `make deploy` / `make seed` / `make smoke-remote` + multi-stage Dockerfile for the TS app + production-grade runbook (bootstrap, secret population, first-time deploy, per-service redeploy, rollback, cost controls, teardown)** are all real, unit-tested (145 Python tests + 17 TypeScript tests, <1s total), and deploy-ready once credentials are wired. Remaining phase: narrative polish + OSS signal.
 
 ---
 
@@ -18,8 +18,8 @@ A multi-agent marketing-ops copilot that turns product-usage signals into orches
 | 5 | Sonnet LLM-as-judge + Mimir metrics + Grafana regression alert rule + GitHub Actions CI + nightly LLM-eval | ✅ shipped |
 | 6 | Cache-aware cost model + per-signal attribution + latency histogram + genai semconv polish + real Grafana dashboard + 4 more alert rules + collector polish | ✅ shipped |
 | 7 | Lead-Scoring agent (conditional HITL) + Attribution agent (multi-touch report) + 4 new RAG playbooks + self-service skill-addition doc | ✅ shipped |
-| 8 | Terraform apply + Cloud Run deploy | ⏳ next |
-| 9 | DESIGN.md polish + CONTRIBUTING + write-up + OSS signal | ⏳ planned |
+| 8 | Terraform (Artifact Registry + Pub/Sub + Secret Manager + generic Cloud Run module) + deploy/seed/smoke-remote scripts + TS Dockerfile + production runbook | ✅ shipped |
+| 9 | DESIGN.md polish + CONTRIBUTING + write-up + OSS signal | ⏳ next |
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the rationale behind each non-obvious choice.
 

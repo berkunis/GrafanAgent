@@ -123,17 +123,113 @@ Every `anthropic.*` span in Tempo carries `gen_ai.prompt` + `gen_ai.completion` 
 
 ---
 
-## Deploy a service to Cloud Run (template)
+## Deploy
+
+### One-time GCP bootstrap
+
+Enable every API the stack needs, in one shot:
 
 ```bash
-docker build --build-arg SERVICE_MODULE=agents.router.main \
-  -t us-central1-docker.pkg.dev/$GCP_PROJECT_ID/grafanagent/router:latest .
-docker push us-central1-docker.pkg.dev/$GCP_PROJECT_ID/grafanagent/router:latest
-gcloud run deploy router \
-  --image us-central1-docker.pkg.dev/$GCP_PROJECT_ID/grafanagent/router:latest \
-  --region us-central1 --no-allow-unauthenticated \
-  --set-env-vars OTEL_EXPORTER_OTLP_ENDPOINT=$OTEL_ENDPOINT \
-  --set-secrets ANTHROPIC_API_KEY=anthropic-key:latest,OTEL_EXPORTER_OTLP_HEADERS=otlp-headers:latest
+export GCP_PROJECT_ID=your-project-id
+export GCP_REGION=us-central1
+
+gcloud services enable \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com \
+  secretmanager.googleapis.com \
+  pubsub.googleapis.com \
+  bigquery.googleapis.com \
+  sqladmin.googleapis.com \
+  aiplatform.googleapis.com \
+  servicenetworking.googleapis.com \
+  --project "$GCP_PROJECT_ID"
+
+make auth   # ADC login + docker registry auth
 ```
 
-Phase 8 replaces this manual template with Terraform-managed Cloud Run services + Secret Manager mounts.
+### One-time secret population
+
+Secret shells are created by Terraform; the values go in out-of-band so
+nothing sensitive ever lives in state:
+
+```bash
+for secret in anthropic-api-key otel-exporter-otlp-headers \
+              slack-bot-token slack-signing-secret \
+              customerio-site-id customerio-api-key; do
+  read -r -p "Paste value for $secret: " value
+  printf '%s' "$value" | \
+    gcloud secrets versions add "$secret" --data-file=- --project "$GCP_PROJECT_ID"
+done
+```
+
+Rotate any secret later by running that same `versions add` — no `terraform apply` needed.
+
+### First-time deploy
+
+```bash
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
+# Edit terraform.tfvars: flip enable_cloudsql=true, enable_deploy=true, fill
+# slack_approval_channel / attribution_post_channel / otel_exporter_otlp_endpoint.
+
+make tf-init
+
+# Build, push, and roll every service in one command.
+make deploy
+
+# Idempotent BQ seed + pgvector corpus ingest against the deployed DSN.
+make seed
+
+# Smoke the deployed router end-to-end.
+make smoke-remote
+```
+
+`make deploy` uses the short git SHA as the image tag by default, so each
+deploy is an atomic revision shift — the `TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST`
+config in the Cloud Run module does the cutover.
+
+### Redeploy one service
+
+```bash
+IMAGE_TAG=$(git rev-parse --short HEAD)
+REPO="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/grafanagent"
+docker build --platform linux/amd64 \
+  --build-arg SERVICE_MODULE=agents.router.main \
+  -t "$REPO/router:$IMAGE_TAG" .
+docker push "$REPO/router:$IMAGE_TAG"
+terraform -chdir=infra/terraform apply \
+  -target=module.agent_router \
+  -var "image_tag=$IMAGE_TAG" \
+  -var "enable_deploy=true" \
+  -auto-approve
+```
+
+### Rollback
+
+```bash
+# image_tag is the one knob that changes; point it at a known-good SHA.
+terraform -chdir=infra/terraform apply \
+  -var "image_tag=sha-lastgood" \
+  -var "enable_deploy=true" \
+  -auto-approve
+```
+
+### Cost controls
+
+- `min_instances = 0` on every service — cold starts, but no $ when idle.
+- `max_instances = 5` caps the blast radius of a retry storm.
+- Artifact Registry `cleanup_policies` keep the 30 most recent tags + auto-delete untagged images after 7 days.
+- Pub/Sub dead-letter topic caps delivery attempts at 10 — bad payloads can't drain the Anthropic budget.
+- The `grafanagent-cost-spike` alert pages at $5/hour.
+
+### Teardown
+
+```bash
+terraform -chdir=infra/terraform destroy \
+  -var "project_id=$GCP_PROJECT_ID" \
+  -var "enable_deploy=true" \
+  -var "enable_cloudsql=true"
+```
+
+Cloud SQL is deletion-protected by default — set `deletion_protection=false`
+in the cloudsql module if you genuinely want to drop the instance.

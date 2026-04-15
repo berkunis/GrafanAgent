@@ -1,0 +1,11 @@
+{
+  "id": "golden-aha-001",
+  "type": "aha_moment_threshold",
+  "source": "cli",
+  "user_id": "user-aha-001",
+  "payload": {
+    "threshold": "4_actions_in_first_hour",
+    "actions_taken": 4,
+    "plan": "free"
+  }
+}

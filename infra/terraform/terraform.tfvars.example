@@ -1,2 +1,20 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is .gitignore'd.
+
 project_id = "your-gcp-project-id"
 region     = "us-central1"
+
+# Pre-deploy: leave both false — you get BQ + a no-op plan.
+# Deploy day: flip both to true, then `terraform apply`.
+enable_cloudsql = false
+enable_deploy   = false
+
+# Stamped by make deploy — the short git SHA of the commit you're shipping.
+# Kept as "latest" while enable_deploy=false; real deploys override on the CLI:
+#   terraform apply -var 'image_tag=sha-abc123'
+image_tag = "latest"
+
+# Runtime config the agents pick up. Fill once the Slack app + Grafana Cloud
+# stack are provisioned.
+slack_approval_channel      = ""
+attribution_post_channel    = ""
+otel_exporter_otlp_endpoint = ""

@@ -1,5 +1,7 @@
-.PHONY: install dev fmt lint test smoke tf-init clean db-up db-down ingest \
-        bolt-install bolt-build bolt-test bolt-dev bolt-up bolt-down
+.PHONY: install dev fmt lint test smoke tf-init tf-plan tf-validate clean \
+        db-up db-down ingest \
+        bolt-install bolt-build bolt-test bolt-dev bolt-up bolt-down \
+        deploy seed smoke-remote auth
 
 install:
 	pip install -e ".[dev]"
@@ -61,8 +63,44 @@ bolt-up:
 bolt-down:
 	docker compose stop slack-approver
 
+# ---- Terraform ----
+
 tf-init:
 	terraform -chdir=infra/terraform init
+
+tf-validate:
+	terraform -chdir=infra/terraform validate
+
+tf-plan:
+	terraform -chdir=infra/terraform plan
+
+# ---- Deploy (Phase 8) ----
+
+# One-time developer auth. Idempotent. Run once per workstation.
+auth:
+	gcloud auth application-default login
+	gcloud auth configure-docker $${GCP_REGION:-us-central1}-docker.pkg.dev --quiet
+
+# Build + push every service image + terraform apply. Accepts:
+#   GCP_PROJECT_ID  (required)
+#   GCP_REGION      (default us-central1)
+#   IMAGE_TAG       (default short git SHA)
+deploy:
+	./scripts/deploy.sh
+
+# Idempotent BQ seed + pgvector corpus ingest against the deployed instance.
+seed:
+	ENABLE_DEPLOY=true ./scripts/seed.sh
+
+# Trigger the golden signal against the deployed router. Reads the router URL
+# from terraform output.
+smoke-remote:
+	@URL=$$(terraform -chdir=infra/terraform output -raw router_url); \
+	echo "==> POST $$URL/signal"; \
+	curl -sS -X POST "$$URL/signal" \
+	  -H "content-type: application/json" \
+	  -H "Authorization: Bearer $$(gcloud auth print-identity-token)" \
+	  -d @evals/examples/golden-aha-001.json | jq
 
 clean:
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache

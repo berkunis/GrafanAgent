@@ -34,7 +34,8 @@ variable "deletion_protection" {
 }
 
 variable "labels" {
-  type = map(string)
+  description = "Resource labels."
+  type        = map(string)
   default = {
     project = "grafanagent"
     env     = "demo"
