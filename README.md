@@ -2,7 +2,7 @@
 
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> **Status: Phase 3 of 9 shipped.** Router + BigQuery MCP + lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector + **TypeScript Slack Bolt approval app with full HITL state machine and Block Kit UI** + PII-scrubbing structlog processor are all real, unit-tested (78 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (CLI, eval harness, dashboard, deploy) land in sequence.
+> **Status: Phase 4 of 9 shipped.** Router + BigQuery MCP + lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector + TypeScript Slack Bolt HITL app + PII scrubber + **`grafanagent` CLI with trigger / replay / list / describe / eval** + a 10-case golden set scored against the rule table are all real, unit-tested (93 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (eval-harness LLM judge, dashboard, deploy) land in sequence.
 
 ---
 
@@ -14,8 +14,8 @@ A multi-agent marketing-ops copilot that turns product-usage signals into orches
 | 1 | Real router, BQ MCP, explicit fallback chain, golden BQ seed | ✅ shipped |
 | 2 | Lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector with Vertex AI + 8-playbook corpus | ✅ shipped |
 | 3 | TypeScript Slack Bolt HITL app (Block Kit + state machine + edit modal) + Python Slack MCP + PII scrubber + lifecycle execution loop | ✅ shipped |
-| 4 | `grafanagent` CLI | ⏳ next |
-| 5 | Eval harness + LLM judge + Grafana regression alert + CI | ⏳ planned |
+| 4 | `grafanagent` CLI (trigger / replay / list / describe / eval) + 10-case golden set + rule-table gate | ✅ shipped |
+| 5 | Eval harness LLM-as-judge + Grafana regression alert + CI | ⏳ next |
 | 6 | Cost meter, full dashboard, OTel genai semconv polish | ⏳ planned |
 | 7 | Lead-scoring + Attribution agents | ⏳ planned |
 | 8 | Terraform apply + Cloud Run deploy | ⏳ planned |
@@ -157,7 +157,26 @@ curl -s -X POST localhost:8000/signal -H 'content-type: application/json' -d '{
 
 Returns the real `RoutingDecision` from Claude Haiku plus the fallback `rung_used` and the list of models consulted.
 
-### 4. Drive the Slack approval app by HTTP (no Slack token required)
+### 4. Use the `grafanagent` CLI
+
+Installed as a console script by `pip install -e .`:
+
+```bash
+grafanagent --help                        # subcommand list
+grafanagent list agents                   # 4 agents + 3 MCP servers
+grafanagent list signals                  # rule-table signal types → skills
+grafanagent list playbooks                # every RAG playbook with metadata
+grafanagent describe agent router         # fallback thresholds + rule table
+grafanagent describe mcp bigquery         # allow-list + PII policy
+grafanagent eval                          # golden set → pass-rate gate (exits 1 below 85%)
+grafanagent trigger signal.json           # POST → local router
+grafanagent trigger signal.json -u $URL   # POST → deployed router
+grafanagent replay signal.json            # replay a stored signal (prompt regression)
+```
+
+This closes the JD's "reusable agentic skills invoked across Slack, dashboards, internal apps, **CLIs**" line. `grafanagent eval` is also the CI gate Phase 5 will layer an LLM judge on top of.
+
+### 5. Drive the Slack approval app by HTTP (no Slack token required)
 
 ```bash
 make bolt-up
@@ -171,7 +190,7 @@ curl -s localhost:3030/approvals/$HITL_ID | jq '{state, signal_id, history}'
 
 The Bolt app state machine enforces `draft → posted → approved | rejected | edited | timed_out → executed | cancelled` — disallowed transitions throw. With a real `SLACK_BOT_TOKEN` + `SLACK_SIGNING_SECRET`, Block Kit cards post to the configured channel and the three action buttons (Approve / Reject / Edit+modal) drive the same state machine via Slack Events.
 
-### 5. Probe the BigQuery MCP security layer
+### 6. Probe the BigQuery MCP security layer
 
 ```bash
 python -c "
