@@ -2,7 +2,51 @@
 
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> Status: design + reference architecture. Implementation in progress.
+> **Status: Phase 1 of 9 shipped.** Router + BigQuery MCP + explicit Haiku → Sonnet → rule → HITL fallback chain are real, unit-tested (35 tests, <1s), and runnable locally. Remaining phases (lifecycle agent + RAG, Slack Bolt app, CLI, eval harness, dashboard, deploy) land in sequence.
+
+---
+
+## Build status
+
+| Phase | Scope | State |
+|---|---|---|
+| 0 | Narrative alignment (CLAUDE.md, README, DESIGN.md) | ✅ shipped |
+| 1 | Real router, BQ MCP, explicit fallback chain, golden BQ seed | ✅ shipped |
+| 2 | Lifecycle agent + Customer.io MCP + RAG on pgvector with Vertex AI | ⏳ next |
+| 3 | TypeScript Slack Bolt HITL app + Slack MCP + state machine | ⏳ planned |
+| 4 | `grafanagent` CLI | ⏳ planned |
+| 5 | Eval harness + LLM judge + Grafana regression alert + CI | ⏳ planned |
+| 6 | Cost meter, full dashboard, OTel genai semconv polish | ⏳ planned |
+| 7 | Lead-scoring + Attribution agents | ⏳ planned |
+| 8 | Terraform apply + Cloud Run deploy | ⏳ planned |
+| 9 | DESIGN.md polish + CONTRIBUTING + write-up + OSS signal | ⏳ planned |
+
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the rationale behind each non-obvious choice.
+
+---
+
+## Quickstart (local, no credentials required)
+
+```bash
+git clone https://github.com/berkunis/GrafanAgent.git && cd GrafanAgent
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Unit + integration tests (Anthropic + BigQuery are mocked).
+pytest -q
+
+# Boot each agent/MCP stub once, emit a span, exit.
+make smoke
+```
+
+With an `ANTHROPIC_API_KEY` set you can hit the real router end to end:
+
+```bash
+uvicorn agents.router.app:create_app --factory --reload
+curl -s -X POST localhost:8000/signal -H 'content-type: application/json' -d '{
+  "id":"golden-aha-001","type":"aha_moment_threshold","source":"cli","user_id":"user-aha-001"
+}' | jq
+```
 
 ---
 
