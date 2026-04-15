@@ -42,5 +42,12 @@ crash.log
 # OTel local exports
 otel-traces.json
 
+# Node / TypeScript
+node_modules/
+apps/*/dist/
+apps/*/coverage/
+npm-debug.log*
+yarn-debug.log*
+
 # Private context — never commit JD or interview-strategy notes
 docs/role.md

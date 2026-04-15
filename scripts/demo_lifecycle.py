@@ -1,20 +1,26 @@
-"""End-to-end demo of the lifecycle flow — runs offline, no credentials required.
+"""End-to-end demo of the lifecycle flow, including HITL — runs offline.
 
-Wires the real orchestrator, real RAG (InMemoryVectorStore + HashEmbedder over
-the real playbook corpus), a FakeMcpClient returning realistic BigQuery rows
-and a FakeAnthropic returning a canned Sonnet synthesis. Prints the full
-`LifecycleOutput` as JSON so reviewers can verify the pipeline on their own
-machine in <1 second.
+Wires:
+  - real lifecycle orchestrator
+  - real RAG (InMemoryVectorStore + HashEmbedder over the real 8-playbook corpus)
+  - FakeMcpClient with realistic BigQuery rows, Customer.io drafts, and a
+    canned HITL resolution (approved by default; set HITL_DECISION=rejected
+    to see the rejected path)
+  - FakeAnthropic returning a canned Sonnet synthesis
 
-Run:
+Prints the full `LifecycleOutput` as JSON. Under 1 second, zero credentials.
+
     python -m scripts.demo_lifecycle
+    HITL_DECISION=rejected python -m scripts.demo_lifecycle
 """
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
+from agents._hitl import HitlClient
 from agents._llm import LLMClient
 from agents.lifecycle.orchestrator import LifecycleOrchestrator
 from agents.lifecycle.schemas import LifecycleTask
@@ -29,9 +35,15 @@ CORPUS = Path(__file__).resolve().parent.parent / "rag" / "corpus"
 
 
 class _DemoMcp:
-    """FakeMcpClient returning realistic BigQuery + Customer.io responses."""
+    """FakeMcpClient returning realistic BQ + CIO + Slack HITL responses."""
+
+    def __init__(self, hitl_decision: str = "approved"):
+        self._hitl_decision = hitl_decision
+        self.calls: list[dict] = []
 
     async def call_tool(self, *, server: str, tool: str, arguments: dict) -> dict:
+        self.calls.append({"server": server, "tool": tool})
+
         if server == "bigquery" and tool == "query":
             sql = arguments["sql"]
             if "FROM `grafanagent_demo.users`" in sql:
@@ -57,21 +69,37 @@ class _DemoMcp:
                 ],
                 "row_count": 4,
             }
+
         if server == "customer-io" and tool == "get_campaign_membership":
             return {"campaigns": [], "note": "App-API not configured in demo"}
         if server == "customer-io" and tool == "create_campaign_draft":
             return dict(arguments)
+        if server == "customer-io" and tool == "trigger_broadcast":
+            return {"ok": True, "idempotency_key": f"cio:broadcast:{arguments['signal_id']}"}
+
+        if server == "slack" and tool == "request_approval":
+            return {"hitl_id": "hitl_demo_1", "state": "posted", "channel_id": arguments["channel_id"]}
+        if server == "slack" and tool == "wait_for_approval":
+            return {
+                "state": self._hitl_decision,
+                "decided_by": "isil",
+                "decided_at": "2026-04-15T00:00:05Z",
+                "draft": {},
+            }
+        if server == "slack" and tool == "mark_executed":
+            return {"state": "executed"}
+
         return {}
 
 
 async def main() -> None:
-    # RAG — real corpus + deterministic offline embedder.
+    decision = os.getenv("HITL_DECISION", "approved")
+
     embedder = HashEmbedder()
     store = InMemoryVectorStore(dim=embedder.dim)
     await ingest(embedder=embedder, store=store, corpus_dir=CORPUS)
     retriever = Retriever(embedder, store)
 
-    # LLM — canned Sonnet synthesis matching the approved playbook angle.
     synthesis = tool_use_response(
         tool_name="record_draft",
         tool_input={
@@ -92,7 +120,9 @@ async def main() -> None:
     )
     llm = LLMClient(client=FakeAnthropic([synthesis]), agent="lifecycle")  # type: ignore[arg-type]
 
-    orchestrator = LifecycleOrchestrator(llm=llm, mcp=_DemoMcp(), retriever=retriever)
+    mcp = _DemoMcp(hitl_decision=decision)
+    hitl = HitlClient(mcp, default_channel="C-demo")
+    orchestrator = LifecycleOrchestrator(llm=llm, mcp=mcp, retriever=retriever, hitl=hitl)
 
     task = LifecycleTask(
         signal=Signal(

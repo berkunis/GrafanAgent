@@ -65,3 +65,21 @@ class LifecycleOutput(BaseModel):
     enrichment: Enrichment
     draft: dict[str, Any]
     latency_ms: int
+    hitl_id: str | None = Field(
+        None,
+        description="HITL approval id when the orchestrator gates on Slack; null when HITL is disabled.",
+    )
+    hitl_state: str | None = Field(
+        None,
+        description="Terminal HITL state (approved / rejected / edited / timed_out / cancelled); null when HITL is disabled.",
+    )
+    hitl_decided_by: str | None = None
+    hitl_decided_at: str | None = None
+    executed: bool = Field(
+        default=False,
+        description="True once the downstream Customer.io action fired.",
+    )
+    execution_detail: dict[str, Any] | None = Field(
+        default=None,
+        description="Response from the CIO execution call when executed=True.",
+    )

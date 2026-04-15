@@ -1,4 +1,5 @@
-.PHONY: install dev fmt lint test smoke tf-init clean db-up db-down ingest
+.PHONY: install dev fmt lint test smoke tf-init clean db-up db-down ingest \
+        bolt-install bolt-build bolt-test bolt-dev bolt-up bolt-down
 
 install:
 	pip install -e ".[dev]"
@@ -23,6 +24,7 @@ smoke:
 	SMOKE=1 python -m agents.attribution.main
 	SMOKE=1 python -m mcp_servers.bigquery.server
 	SMOKE=1 python -m mcp_servers.customer_io.server
+	SMOKE=1 python -m mcp_servers.slack.server
 
 db-up:
 	docker compose up -d pgvector
@@ -36,6 +38,28 @@ db-down:
 ingest:
 	PGVECTOR_DSN=postgresql://grafanagent:grafanagent@localhost:5433/grafanagent \
 	  python -m rag.ingest
+
+# ---- Slack Bolt approval app (TypeScript) ----
+
+bolt-install:
+	cd apps/slack-approver && npm install
+
+bolt-build: bolt-install
+	cd apps/slack-approver && npm run build
+
+bolt-test: bolt-install
+	cd apps/slack-approver && npm test
+
+bolt-dev: bolt-install
+	cd apps/slack-approver && npm run dev
+
+# Run the Bolt app in docker compose alongside pgvector.
+bolt-up:
+	docker compose up -d slack-approver
+	@echo "slack-approver on http://localhost:3030"
+
+bolt-down:
+	docker compose stop slack-approver
 
 tf-init:
 	terraform -chdir=infra/terraform init

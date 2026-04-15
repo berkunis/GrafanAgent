@@ -71,6 +71,8 @@ def init_telemetry(service_name: str) -> None:
 
     # --- Structured logs (JSON to stdout; Loki scrapes container stdout) ---
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
+    from observability.pii import pii_scrub_processor
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -78,6 +80,7 @@ def init_telemetry(service_name: str) -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
+            pii_scrub_processor,                        # ← scrub before render
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),

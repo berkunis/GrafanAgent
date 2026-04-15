@@ -6,6 +6,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+from agents._hitl import HitlClient
 from agents._llm import LLMClient
 from agents._mcp import HttpMcpClient
 from agents.lifecycle.orchestrator import LifecycleOrchestrator
@@ -22,10 +23,13 @@ def create_app(*, orchestrator: LifecycleOrchestrator | None = None) -> FastAPI:
         embedder = VertexEmbedder()
         store = PgVectorStore(dim=embedder.dim)
         retriever = Retriever(embedder, store)
+        mcp = HttpMcpClient()
+        hitl = HitlClient(mcp) if os.getenv("SLACK_APPROVAL_CHANNEL") else None
         orchestrator = LifecycleOrchestrator(
             llm=LLMClient(agent="lifecycle"),
-            mcp=HttpMcpClient(),
+            mcp=mcp,
             retriever=retriever,
+            hitl=hitl,
             bq_dataset=os.getenv("BQ_DATASET", "grafanagent_demo"),
         )
 

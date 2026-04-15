@@ -2,7 +2,7 @@
 
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> **Status: Phase 2 of 9 shipped.** Router + BigQuery MCP + lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector with Vertex AI embeddings are all real, unit-tested (55 tests, <1s), and runnable locally. Remaining phases (Slack Bolt app, CLI, eval harness, dashboard, deploy) land in sequence.
+> **Status: Phase 3 of 9 shipped.** Router + BigQuery MCP + lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector + **TypeScript Slack Bolt approval app with full HITL state machine and Block Kit UI** + PII-scrubbing structlog processor are all real, unit-tested (78 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (CLI, eval harness, dashboard, deploy) land in sequence.
 
 ---
 
@@ -13,8 +13,8 @@ A multi-agent marketing-ops copilot that turns product-usage signals into orches
 | 0 | Narrative alignment (CLAUDE.md, README, DESIGN.md) | ✅ shipped |
 | 1 | Real router, BQ MCP, explicit fallback chain, golden BQ seed | ✅ shipped |
 | 2 | Lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector with Vertex AI + 8-playbook corpus | ✅ shipped |
-| 3 | TypeScript Slack Bolt HITL app + Slack MCP + state machine | ⏳ next |
-| 4 | `grafanagent` CLI | ⏳ planned |
+| 3 | TypeScript Slack Bolt HITL app (Block Kit + state machine + edit modal) + Python Slack MCP + PII scrubber + lifecycle execution loop | ✅ shipped |
+| 4 | `grafanagent` CLI | ⏳ next |
 | 5 | Eval harness + LLM judge + Grafana regression alert + CI | ⏳ planned |
 | 6 | Cost meter, full dashboard, OTel genai semconv polish | ⏳ planned |
 | 7 | Lead-scoring + Attribution agents | ⏳ planned |
@@ -32,9 +32,12 @@ git clone https://github.com/berkunis/GrafanAgent.git && cd GrafanAgent
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Unit + integration tests — Anthropic, BigQuery, Customer.io, and Vertex AI are
-# all mocked or faked so the suite runs offline in under a second.
+# Python: unit + integration tests (Anthropic, BigQuery, Customer.io, Vertex AI,
+# and the Slack approver are all mocked or faked — runs offline in <1s).
 pytest -q
+
+# TypeScript: Slack Bolt approval app (Block Kit, state machine, HTTP API).
+make bolt-test
 
 # Boot each agent/MCP stub once, emit a span, exit.
 make smoke
@@ -42,6 +45,12 @@ make smoke
 # Local pgvector + ingest the 8-playbook RAG corpus (HashEmbedder by default,
 # flip to Vertex AI with RAG_EMBEDDER=vertex once ADC is set up).
 make db-up && make ingest
+
+# Bring up the Slack Bolt approver alongside pgvector (HTTP-only without
+# SLACK_BOT_TOKEN — the state machine + API work; Slack interactivity is
+# stubbed out until you wire a real workspace).
+make bolt-up
+curl -s localhost:3030/healthz | jq
 ```
 
 ---
@@ -50,13 +59,14 @@ make db-up && make ingest
 
 The build is phased, but the shipped parts are fully runnable on your laptop without any cloud credentials.
 
-### 1. Run the full lifecycle pipeline end-to-end (offline)
+### 1. Run the full lifecycle pipeline end-to-end — with HITL — offline
 
 ```bash
-python -m scripts.demo_lifecycle
+python -m scripts.demo_lifecycle                          # approved path
+HITL_DECISION=rejected python -m scripts.demo_lifecycle   # rejected path
 ```
 
-Runs the real lifecycle orchestrator against the real 8-playbook RAG corpus, a `FakeMcpClient` returning realistic BigQuery rows, and a canned Sonnet synthesis — so you can see the actual `LifecycleOutput` JSON without hitting any external service.
+Runs the real lifecycle orchestrator against the real 8-playbook RAG corpus, a `FakeMcpClient` that simulates BigQuery + Customer.io + the Slack HITL resolution, and a canned Sonnet synthesis — so you can see the full `LifecycleOutput` JSON (including `hitl_state`, `executed`, and the downstream Customer.io execution detail) without hitting any external service.
 
 <details><summary>Abridged output</summary>
 
@@ -93,7 +103,16 @@ Runs the real lifecycle orchestrator against the real 8-playbook RAG corpus, a `
     "playbook_slug": "aha-moment-free-user",
     "rationale": "aha-moment + invite momentum; playbook emphasises inviter recognition."
   },
-  "latency_ms": 2
+  "latency_ms": 2,
+  "hitl_id": "hitl_demo_1",
+  "hitl_state": "approved",
+  "hitl_decided_by": "isil",
+  "hitl_decided_at": "2026-04-15T00:00:05Z",
+  "executed": true,
+  "execution_detail": {
+    "ok": true,
+    "idempotency_key": "cio:broadcast:golden-aha-001"
+  }
 }
 ```
 
@@ -116,7 +135,11 @@ lifecycle.run                         ← root; signal_id, user_id, latency_ms
 │     gen_ai.usage.input_tokens=120
 │     gen_ai.usage.output_tokens=40
 │     grafanagent.cost_usd=0.00096
-└── lifecycle.cio.create_draft
+├── lifecycle.cio.create_draft
+├── hitl.request                      ← Block Kit card posted; hitl.id attr
+├── hitl.wait                         ← long-poll until terminal state
+├── lifecycle.cio.execute             ← trigger_broadcast w/ idempotency_key
+└── hitl.mark_executed
 ```
 
 Every rung of the router fallback chain, every MCP tool call, and every LLM call emits a span with the same `gen_ai.*` semantic conventions — Phase 6 wires these into a Grafana dashboard, but they're already visible today.
@@ -134,7 +157,21 @@ curl -s -X POST localhost:8000/signal -H 'content-type: application/json' -d '{
 
 Returns the real `RoutingDecision` from Claude Haiku plus the fallback `rung_used` and the list of models consulted.
 
-### 4. Probe the BigQuery MCP security layer
+### 4. Drive the Slack approval app by HTTP (no Slack token required)
+
+```bash
+make bolt-up
+HITL_ID=$(curl -s -X POST localhost:3030/approvals -H 'content-type: application/json' -d '{
+  "signal_id":"sig-demo","channel_id":"C-demo",
+  "draft":{"signal_id":"sig-demo","user_id":"u1","audience_segment":"free_activated_today",
+    "channel":"email","subject":"Hi","body_markdown":"body","call_to_action":"Go","rationale":"r","playbook_slug":null}
+}' | jq -r .hitl_id)
+curl -s localhost:3030/approvals/$HITL_ID | jq '{state, signal_id, history}'
+```
+
+The Bolt app state machine enforces `draft → posted → approved | rejected | edited | timed_out → executed | cancelled` — disallowed transitions throw. With a real `SLACK_BOT_TOKEN` + `SLACK_SIGNING_SECRET`, Block Kit cards post to the configured channel and the three action buttons (Approve / Reject / Edit+modal) drive the same state machine via Slack Events.
+
+### 5. Probe the BigQuery MCP security layer
 
 ```bash
 python -c "

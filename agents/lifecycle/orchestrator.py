@@ -31,6 +31,7 @@ from typing import Any
 
 from opentelemetry import trace
 
+from agents._hitl import HitlClient
 from agents._llm import LLMClient
 from agents._mcp import McpClient
 from agents.lifecycle.agent import synthesize_draft
@@ -56,12 +57,16 @@ class LifecycleOrchestrator:
         llm: LLMClient,
         mcp: McpClient,
         retriever: Retriever,
+        hitl: HitlClient | None = None,
         bq_dataset: str = "grafanagent_demo",
+        execute_broadcast_name: str = "lifecycle_draft_approved",
     ):
         self._llm = llm
         self._mcp = mcp
         self._retriever = retriever
+        self._hitl = hitl
         self._bq_dataset = bq_dataset
+        self._execute_broadcast = execute_broadcast_name
 
     async def run(self, task: LifecycleTask) -> LifecycleOutput:
         start = time.perf_counter()
@@ -77,6 +82,44 @@ class LifecycleOrchestrator:
             draft_spec = await synthesize_draft(llm=self._llm, task=task, enrichment=enrichment)
             draft = await self._materialize_draft(task, draft_spec)
 
+            hitl_fields: dict[str, Any] = {
+                "hitl_id": None,
+                "hitl_state": None,
+                "hitl_decided_by": None,
+                "hitl_decided_at": None,
+                "executed": False,
+                "execution_detail": None,
+            }
+            final_draft = draft
+
+            if self._hitl is not None:
+                handle = await self._hitl.request(
+                    signal_id=task.signal.id,
+                    draft=draft,
+                    user_context=(
+                        enrichment.user_context.model_dump()
+                        if enrichment.user_context else None
+                    ),
+                )
+                resolution = await self._hitl.wait(handle.hitl_id)
+                hitl_fields["hitl_id"] = resolution.hitl_id
+                hitl_fields["hitl_state"] = resolution.state
+                hitl_fields["hitl_decided_by"] = resolution.decided_by
+                hitl_fields["hitl_decided_at"] = resolution.decided_at
+                # Operator edits flow back through `resolution.draft`.
+                if resolution.draft:
+                    final_draft = {**draft, **resolution.draft}
+
+                if resolution.approved:
+                    exec_result = await self._execute(task, final_draft)
+                    hitl_fields["executed"] = bool(exec_result.get("ok"))
+                    hitl_fields["execution_detail"] = exec_result
+                    await self._hitl.mark_executed(
+                        resolution.hitl_id,
+                        by="lifecycle",
+                        reason="broadcast triggered",
+                    )
+
             latency_ms = int((time.perf_counter() - start) * 1000)
             span.set_attribute("lifecycle.latency_ms", latency_ms)
             _log.info(
@@ -86,14 +129,17 @@ class LifecycleOrchestrator:
                 channel=draft_spec.channel,
                 playbook=draft_spec.playbook_slug,
                 partial=enrichment.partial,
+                hitl_state=hitl_fields["hitl_state"],
+                executed=hitl_fields["executed"],
                 latency_ms=latency_ms,
             )
 
             return LifecycleOutput(
                 signal_id=task.signal.id,
                 enrichment=enrichment,
-                draft=draft,
+                draft=final_draft,
                 latency_ms=latency_ms,
+                **hitl_fields,
             )
 
     # ---------- fan-out ----------
@@ -204,6 +250,26 @@ class LifecycleOrchestrator:
             return [c if isinstance(c, str) else c.get("name", "?") for c in campaigns]
 
     # ---------- materialize ----------
+
+    async def _execute(self, task: LifecycleTask, draft: dict[str, Any]) -> dict[str, Any]:
+        """Fire the approved draft via Customer.io. Idempotent on signal_id."""
+        with _tracer.start_as_current_span("lifecycle.cio.execute"):
+            return await self._mcp.call_tool(
+                server="customer-io",
+                tool="trigger_broadcast",
+                arguments={
+                    "signal_id": task.signal.id,
+                    "user_id": task.signal.user_id or draft.get("user_id", "unknown"),
+                    "broadcast_name": self._execute_broadcast,
+                    "data": {
+                        "subject": draft.get("subject"),
+                        "body_markdown": draft.get("body_markdown"),
+                        "call_to_action": draft.get("call_to_action"),
+                        "playbook_slug": draft.get("playbook_slug"),
+                        "audience_segment": draft.get("audience_segment"),
+                    },
+                },
+            )
 
     async def _materialize_draft(self, task: LifecycleTask, spec: DraftSpec) -> dict[str, Any]:
         """Turn the LLM's DraftSpec into a Customer.io draft via the MCP tool.

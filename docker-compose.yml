@@ -18,5 +18,22 @@ services:
       timeout: 3s
       retries: 20
 
+  slack-approver:
+    image: node:22-alpine
+    container_name: grafanagent-slack-approver
+    working_dir: /app
+    command: sh -c "npm install --silent && npm run dev"
+    ports:
+      - "127.0.0.1:3030:3030"
+    environment:
+      PORT: "3030"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+    volumes:
+      - ./apps/slack-approver:/app
+      - slack_approver_node_modules:/app/node_modules
+
 volumes:
   grafanagent_pgvector_data: {}
+  slack_approver_node_modules: {}

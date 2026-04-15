@@ -1,0 +1,29 @@
+{
+  "name": "grafanagent-slack-approver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HITL Slack approval app for GrafanAgent. Renders Block Kit cards, runs the approval state machine, and exposes an HTTP API the Python Slack MCP wraps.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.22.0",
+    "express": "^4.21.1",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
