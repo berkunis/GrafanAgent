@@ -1,0 +1,101 @@
+{
+  "groups": [
+    {
+      "name": "grafanagent-eval",
+      "folder": "GrafanAgent",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "grafanagent-eval-regression",
+          "title": "GrafanAgent golden-set pass-rate regression",
+          "condition": "regression",
+          "data": [
+            {
+              "refId": "pass_rate",
+              "datasourceUid": "grafanacloud-prom",
+              "relativeTimeRange": { "from": 900, "to": 0 },
+              "model": {
+                "expr": "min_over_time(grafanagent_eval_pass_rate{set=\"golden_set\", mode=\"llm\"}[15m])",
+                "instant": true,
+                "legendFormat": "pass_rate",
+                "refId": "pass_rate"
+              }
+            },
+            {
+              "refId": "regression",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "expression": "pass_rate",
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.85], "type": "lt" },
+                    "operator": { "type": "and" },
+                    "type": "query"
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "15m",
+          "no_data_state": "NoData",
+          "exec_err_state": "Error",
+          "annotations": {
+            "summary": "Golden-set LLM-judge pass rate fell below 85%.",
+            "description": "A prompt or agent change has regressed the router on the 10-case golden set. Check the latest eval-nightly run and the PRs merged in the last 24h.",
+            "runbook_url": "https://github.com/berkunis/GrafanAgent/blob/main/docs/runbook.md#eval-regression"
+          },
+          "labels": {
+            "service": "grafanagent",
+            "surface": "router",
+            "severity": "page"
+          }
+        },
+        {
+          "uid": "grafanagent-eval-case-failures",
+          "title": "GrafanAgent golden-set case failures",
+          "condition": "fail_rate",
+          "data": [
+            {
+              "refId": "fails",
+              "datasourceUid": "grafanacloud-prom",
+              "relativeTimeRange": { "from": 3600, "to": 0 },
+              "model": {
+                "expr": "sum(increase(grafanagent_eval_cases_total{outcome=\"fail\"}[1h]))",
+                "instant": true,
+                "legendFormat": "fails",
+                "refId": "fails"
+              }
+            },
+            {
+              "refId": "fail_rate",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "expression": "fails",
+                "conditions": [
+                  {
+                    "evaluator": { "params": [2], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "type": "query"
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "5m",
+          "no_data_state": "OK",
+          "annotations": {
+            "summary": "More than two golden-set cases failed in the last hour.",
+            "description": "Likely a single bad deploy. Check the latest merged PRs + the eval-nightly workflow log."
+          },
+          "labels": {
+            "service": "grafanagent",
+            "surface": "router",
+            "severity": "warn"
+          }
+        }
+      ]
+    }
+  ]
+}

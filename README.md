@@ -2,7 +2,7 @@
 
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> **Status: Phase 4 of 9 shipped.** Router + BigQuery MCP + lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector + TypeScript Slack Bolt HITL app + PII scrubber + **`grafanagent` CLI with trigger / replay / list / describe / eval** + a 10-case golden set scored against the rule table are all real, unit-tested (93 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (eval-harness LLM judge, dashboard, deploy) land in sequence.
+> **Status: Phase 5 of 9 shipped.** Router + BQ MCP + lifecycle agent + Customer.io MCP + RAG + TS Slack Bolt HITL + PII scrubber + `grafanagent` CLI + **LLM-judge eval harness (Sonnet judge, Mimir metrics, Grafana regression alert rule) + GitHub Actions CI + nightly LLM-eval workflow** are all real, unit-tested (104 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (full dashboard polish, lead-scoring + attribution agents, deploy, narrative) land in sequence.
 
 ---
 
@@ -15,8 +15,8 @@ A multi-agent marketing-ops copilot that turns product-usage signals into orches
 | 2 | Lifecycle agent (parallel fan-out) + Customer.io MCP + RAG on pgvector with Vertex AI + 8-playbook corpus | ✅ shipped |
 | 3 | TypeScript Slack Bolt HITL app (Block Kit + state machine + edit modal) + Python Slack MCP + PII scrubber + lifecycle execution loop | ✅ shipped |
 | 4 | `grafanagent` CLI (trigger / replay / list / describe / eval) + 10-case golden set + rule-table gate | ✅ shipped |
-| 5 | Eval harness LLM-as-judge + Grafana regression alert + CI | ⏳ next |
-| 6 | Cost meter, full dashboard, OTel genai semconv polish | ⏳ planned |
+| 5 | Sonnet LLM-as-judge + Mimir metrics + Grafana regression alert rule + GitHub Actions CI + nightly LLM-eval | ✅ shipped |
+| 6 | Cost meter, full dashboard, OTel genai semconv polish | ⏳ next |
 | 7 | Lead-scoring + Attribution agents | ⏳ planned |
 | 8 | Terraform apply + Cloud Run deploy | ⏳ planned |
 | 9 | DESIGN.md polish + CONTRIBUTING + write-up + OSS signal | ⏳ planned |
@@ -168,13 +168,14 @@ grafanagent list signals                  # rule-table signal types → skills
 grafanagent list playbooks                # every RAG playbook with metadata
 grafanagent describe agent router         # fallback thresholds + rule table
 grafanagent describe mcp bigquery         # allow-list + PII policy
-grafanagent eval                          # golden set → pass-rate gate (exits 1 below 85%)
+grafanagent eval                          # rule-mode gate (deterministic, offline)
+grafanagent eval --mode llm --emit-metrics  # Sonnet judge + Mimir metrics (needs ANTHROPIC_API_KEY)
 grafanagent trigger signal.json           # POST → local router
 grafanagent trigger signal.json -u $URL   # POST → deployed router
 grafanagent replay signal.json            # replay a stored signal (prompt regression)
 ```
 
-This closes the JD's "reusable agentic skills invoked across Slack, dashboards, internal apps, **CLIs**" line. `grafanagent eval` is also the CI gate Phase 5 will layer an LLM judge on top of.
+This closes the JD's "reusable agentic skills invoked across Slack, dashboards, internal apps, **CLIs**" line. `grafanagent eval` is also the CI gate that Phase 5 now layers a Sonnet judge on top of — see `.github/workflows/ci.yml` (rule-mode on every PR) and `.github/workflows/eval-nightly.yml` (LLM-judge at 09:00 UTC with Mimir metrics).
 
 ### 5. Drive the Slack approval app by HTTP (no Slack token required)
 

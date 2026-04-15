@@ -69,6 +69,74 @@
       "type": "traces",
       "title": "Recent agent traces (Tempo, placeholder)",
       "gridPos": { "x": 0, "y": 15, "w": 24, "h": 10 }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Eval (golden set)",
+      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 1 }
+    },
+    {
+      "id": 31,
+      "type": "gauge",
+      "title": "Pass rate (llm mode, last run)",
+      "gridPos": { "x": 0, "y": 26, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "expr": "grafanagent_eval_pass_rate{set=\"golden_set\", mode=\"llm\"}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 0.7 },
+              { "color": "green", "value": 0.85 }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Mean judge score by dimension",
+      "gridPos": { "x": 8, "y": 26, "w": 16, "h": 6 },
+      "targets": [
+        {
+          "expr": "grafanagent_eval_judge_score{set=\"golden_set\", mode=\"llm\"}",
+          "legendFormat": "{{dimension}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 5 }
+      }
+    },
+    {
+      "id": 33,
+      "type": "bargauge",
+      "title": "Pass rate by skill",
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "expr": "grafanagent_eval_per_skill_pass_rate{set=\"golden_set\", mode=\"llm\"}",
+          "legendFormat": "{{skill}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 1, "unit": "percentunit" }
+      }
     }
   ]
 }
