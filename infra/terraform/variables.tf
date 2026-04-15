@@ -38,3 +38,9 @@ variable "bq_location" {
   type        = string
   default     = "US"
 }
+
+variable "enable_cloudsql" {
+  description = "Create the Cloud SQL pgvector instance. Off by default so bare `terraform plan` works without the Secret Manager API enabled. Flip to true when deploying (Phase 8)."
+  type        = bool
+  default     = false
+}

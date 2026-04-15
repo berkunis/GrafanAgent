@@ -20,8 +20,19 @@ output "bq_tables" {
   description = "Fully qualified BQ tables the agents can reference."
 }
 
+module "cloudsql" {
+  count      = var.enable_cloudsql ? 1 : 0
+  source     = "./modules/cloudsql"
+  project_id = var.project_id
+  region     = var.region
+}
+
+output "cloudsql_dsn_secret_id" {
+  value       = var.enable_cloudsql ? module.cloudsql[0].dsn_secret_id : null
+  description = "Secret Manager id holding the pgvector DSN; null when CloudSQL is disabled."
+}
+
 # Further modules land in later phases:
 #   - cloud_run (per agent + per MCP server)
 #   - pubsub (signal-ingest topic + per-agent subscriptions)
-#   - cloudsql (pgvector instance for RAG)
 #   - secret_manager (Anthropic key, Slack tokens, Customer.io creds, Grafana OTLP token)
