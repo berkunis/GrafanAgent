@@ -65,7 +65,34 @@ def describe_agent(
             Panel.fit(
                 f"Synthesis model: claude-sonnet-4-5\n"
                 f"Fan-out legs:    BigQuery user ctx, RAG playbooks, Customer.io memberships\n"
+                f"HITL:            gates every draft before Customer.io execution\n"
                 f"RAG corpus:      {len(playbooks)} playbooks",
+                title="orchestration",
+                border_style="green",
+            )
+        )
+
+    if spec.name == "lead_scoring":
+        console.print(
+            Panel.fit(
+                "Synthesis model: claude-sonnet-4-5\n"
+                "Fan-out legs:    BigQuery lead + usage, RAG scoring playbooks\n"
+                "HITL:            gates only high-priority SDR alerts\n"
+                "                 medium priority fires without a human gate\n"
+                "                 low priority drops to nurture queue silently",
+                title="orchestration",
+                border_style="green",
+            )
+        )
+
+    if spec.name == "attribution":
+        console.print(
+            Panel.fit(
+                "Synthesis model: claude-sonnet-4-5\n"
+                "Fan-out legs:    BigQuery touches + opportunities, RAG attribution playbooks\n"
+                "Output:          first_touch, last_touch, multi_touch (weights sum to 1.0)\n"
+                "                 + top-driver rationale + three-line verdict\n"
+                "HITL:            none — reports post directly to the RevOps channel",
                 title="orchestration",
                 border_style="green",
             )

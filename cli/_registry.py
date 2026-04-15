@@ -47,18 +47,18 @@ AGENTS: tuple[AgentSpec, ...] = (
     AgentSpec(
         name="lead_scoring",
         kind="skill",
-        model=None,
+        model="claude-sonnet-4-5",
         default_port=8002,
-        module="agents.lead_scoring.main",
-        description="Stub — Phase 7 replicates the lifecycle pattern here.",
+        module="agents.lead_scoring.app:create_app",
+        description="Fan-out over BQ + RAG; Sonnet emits LeadScore (fit_score, priority, drivers); HITL gates high-priority SDR alerts.",
     ),
     AgentSpec(
         name="attribution",
         kind="skill",
-        model=None,
+        model="claude-sonnet-4-5",
         default_port=8003,
-        module="agents.attribution.main",
-        description="Stub — Phase 7 replicates the lifecycle pattern here.",
+        module="agents.attribution.app:create_app",
+        description="Fan-out over BQ + RAG; Sonnet produces AttributionReport with first/last/multi-touch + verdict; posts to RevOps Slack.",
     ),
 )
 

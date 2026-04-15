@@ -2,7 +2,7 @@
 
 A multi-agent marketing-ops copilot that turns product-usage signals into orchestrated cross-platform actions — fully instrumented with the **Grafana LGTM stack** (Loki, Grafana, Tempo, Mimir) so every prompt, token, latency, cost, and decision is observable in real time.
 
-> **Status: Phase 6 of 9 shipped.** Router + BQ MCP + lifecycle agent + Customer.io MCP + RAG + TS Slack Bolt HITL + PII scrubber + `grafanagent` CLI + LLM-judge eval harness + CI + nightly workflow + **full Grafana dashboard with real PromQL panels (cost-by-bucket, per-signal cost, p50/p95/p99 latency from histogram, router rung usage, eval panels, Tempo trace explorer) + cache-aware cost model + per-signal contextvars attribution + four additional alert rules (cost spike, p95 latency, LLM error rate, HITL escalation spike) + polished OTel collector pipeline** are all real, unit-tested (123 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (lead-scoring + attribution agents, deploy, narrative) land in sequence.
+> **Status: Phase 7 of 9 shipped.** Router + BQ MCP + lifecycle agent + Customer.io MCP + RAG + TS Slack Bolt HITL + PII scrubber + `grafanagent` CLI + LLM-judge eval harness + CI + full Grafana dashboard + alert rules + **Lead-Scoring agent (priority-conditional HITL + conditional execution) + Attribution agent (structured report with multi-touch weights, posts to RevOps Slack)** are all real, unit-tested (131 Python tests + 17 TypeScript tests, <1s total), and runnable locally. Remaining phases (deploy, narrative polish) land in sequence.
 
 ---
 
@@ -17,8 +17,8 @@ A multi-agent marketing-ops copilot that turns product-usage signals into orches
 | 4 | `grafanagent` CLI (trigger / replay / list / describe / eval) + 10-case golden set + rule-table gate | ✅ shipped |
 | 5 | Sonnet LLM-as-judge + Mimir metrics + Grafana regression alert rule + GitHub Actions CI + nightly LLM-eval | ✅ shipped |
 | 6 | Cache-aware cost model + per-signal attribution + latency histogram + genai semconv polish + real Grafana dashboard + 4 more alert rules + collector polish | ✅ shipped |
-| 7 | Lead-scoring + Attribution agents | ⏳ next |
-| 8 | Terraform apply + Cloud Run deploy | ⏳ planned |
+| 7 | Lead-Scoring agent (conditional HITL) + Attribution agent (multi-touch report) + 4 new RAG playbooks + self-service skill-addition doc | ✅ shipped |
+| 8 | Terraform apply + Cloud Run deploy | ⏳ next |
 | 9 | DESIGN.md polish + CONTRIBUTING + write-up + OSS signal | ⏳ planned |
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the rationale behind each non-obvious choice.
