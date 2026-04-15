@@ -1,0 +1,49 @@
+# OTel Collector config — sidecar/agent that batches signals and forwards to
+# Grafana Cloud's OTLP endpoint. For local dev you can skip this and let SDKs
+# push directly via OTEL_EXPORTER_OTLP_ENDPOINT.
+#
+# Deploy as a Cloud Run service or sidecar; point GRAFANA_OTLP_ENDPOINT and
+# GRAFANA_OTLP_TOKEN at your stack from Secret Manager.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+  memory_limiter:
+    check_interval: 2s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  resource:
+    attributes:
+      - key: service.namespace
+        value: grafanagent
+        action: upsert
+
+exporters:
+  otlphttp/grafana:
+    endpoint: ${env:GRAFANA_OTLP_ENDPOINT}
+    headers:
+      authorization: Basic ${env:GRAFANA_OTLP_TOKEN}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/grafana]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/grafana]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/grafana]

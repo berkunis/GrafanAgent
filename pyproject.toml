@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grafanagent"
+version = "0.0.1"
+description = "Multi-agent marketing-ops copilot instrumented with the Grafana LGTM stack."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Isil Berkun", email = "berkunis@digifab.ai" }]
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "mcp>=1.2.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "httpx>=0.27.0",
+    "structlog>=24.4.0",
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-exporter-otlp>=1.28.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-instrumentation-httpx>=0.49b0",
+    "opentelemetry-instrumentation-logging>=0.49b0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+]
+bigquery = ["google-cloud-bigquery>=3.26.0"]
+slack    = ["slack-sdk>=3.33.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agents*", "mcp_servers*", "observability*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

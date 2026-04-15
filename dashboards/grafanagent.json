@@ -1,0 +1,74 @@
+{
+  "title": "GrafanAgent — Agent Ops",
+  "uid": "grafanagent-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["grafanagent", "ai", "agents"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+        "query": "label_values(service_name)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Cost & tokens",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tokens (placeholder)",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Estimated $ cost (placeholder)",
+      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 4 }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Latency & success",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "p95 latency by service (placeholder)",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Success rate (placeholder)",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Traces",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }
+    },
+    {
+      "id": 21,
+      "type": "traces",
+      "title": "Recent agent traces (Tempo, placeholder)",
+      "gridPos": { "x": 0, "y": 15, "w": 24, "h": 10 }
+    }
+  ]
+}
