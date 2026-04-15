@@ -14,7 +14,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from agents._llm import LLMClient
 from agents.router.fallback import FallbackChain, FallbackConfig
 from agents.router.schemas import RouterResponse, Signal
-from observability import get_logger
+from observability import get_logger, signal_context
 
 _tracer = trace.get_tracer("agents.router.app")
 
@@ -38,7 +38,10 @@ def create_app(*, chain: FallbackChain | None = None) -> FastAPI:
     @app.post("/signal", response_model=RouterResponse)
     async def post_signal(signal: Signal) -> RouterResponse:
         start = time.perf_counter()
-        with _tracer.start_as_current_span("router.signal") as span:
+        # signal_context propagates signal_id/type onto every downstream span
+        # + metric label (LLM calls, MCP calls, HITL wait) via contextvars,
+        # so the dashboard can ask "what did *this* one signal cost?"
+        with signal_context(signal.id, signal.type), _tracer.start_as_current_span("router.signal") as span:
             span.set_attribute("grafanagent.signal_id", signal.id)
             span.set_attribute("grafanagent.signal_type", signal.type)
             span.set_attribute("grafanagent.signal_source", signal.source)

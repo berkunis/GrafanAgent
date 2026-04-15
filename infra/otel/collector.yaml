@@ -1,9 +1,10 @@
-# OTel Collector config — sidecar/agent that batches signals and forwards to
-# Grafana Cloud's OTLP endpoint. For local dev you can skip this and let SDKs
-# push directly via OTEL_EXPORTER_OTLP_ENDPOINT.
+# OTel Collector — sidecar/agent that batches signals and forwards to Grafana
+# Cloud's OTLP endpoint. For local dev you can skip this and let the Python
+# SDKs push directly via OTEL_EXPORTER_OTLP_ENDPOINT.
 #
-# Deploy as a Cloud Run service or sidecar; point GRAFANA_OTLP_ENDPOINT and
-# GRAFANA_OTLP_TOKEN at your stack from Secret Manager.
+# Deploy as a Cloud Run service or a sidecar. Secrets come from Secret Manager:
+#   GRAFANA_OTLP_ENDPOINT = https://otlp-gateway-<region>.grafana.net/otlp
+#   GRAFANA_OTLP_TOKEN    = base64(instance_id:api_token)
 
 receivers:
   otlp:
@@ -14,30 +15,80 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
-  batch:
-    timeout: 5s
-    send_batch_size: 512
+  # Keep memory pressure bounded before anything else sees a batch.
   memory_limiter:
     check_interval: 2s
     limit_percentage: 80
     spike_limit_percentage: 25
+
+  # Tag every signal with the project so Grafana Cloud can scope alerts /
+  # dashboards by service.namespace rather than per-service.name guesswork.
   resource:
     attributes:
       - key: service.namespace
         value: grafanagent
         action: upsert
 
+  # Ratchet down the gen_ai.prompt / gen_ai.completion event payloads on the
+  # trace pipeline — agents emit them up to ~8KB, which is fine for Tempo but
+  # blows up log ingest if we ever dual-pipe events to Loki.
+  attributes/trim_prompt_events:
+    actions:
+      - key: messages_json
+        action: hash
+      - key: content_json
+        action: hash
+
+  # Strip any value that slipped past our Python PII scrubber before it leaves
+  # the mesh. Belt and braces — see observability/pii.py for the source-side
+  # scrubber.
+  attributes/pii:
+    actions:
+      - key: email
+        action: delete
+      - key: phone
+        action: delete
+      - key: user.email
+        action: delete
+      - key: http.request.header.authorization
+        action: delete
+
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
 exporters:
   otlphttp/grafana:
     endpoint: ${env:GRAFANA_OTLP_ENDPOINT}
     headers:
       authorization: Basic ${env:GRAFANA_OTLP_TOKEN}
+    # Retry policy: retry transient Grafana Cloud errors for up to 5 minutes
+    # before dropping — the Python SDK's retry budget is shorter, so this
+    # catches slow upstream hiccups that outlast a single SDK backoff.
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2048
+
+  # Useful when debugging locally — mount this exporter into the pipelines
+  # temporarily and tail `kubectl logs` / `docker compose logs` to see every
+  # signal the collector is receiving.
+  debug:
+    verbosity: normal
 
 service:
+  telemetry:
+    logs:
+      level: info
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
+      processors: [memory_limiter, resource, attributes/pii, attributes/trim_prompt_events, batch]
       exporters: [otlphttp/grafana]
     metrics:
       receivers: [otlp]
@@ -45,5 +96,5 @@ service:
       exporters: [otlphttp/grafana]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
+      processors: [memory_limiter, resource, attributes/pii, batch]
       exporters: [otlphttp/grafana]

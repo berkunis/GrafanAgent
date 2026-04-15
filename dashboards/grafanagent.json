@@ -2,7 +2,7 @@
   "title": "GrafanAgent — Agent Ops",
   "uid": "grafanagent-overview",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "tags": ["grafanagent", "ai", "agents"],
   "timezone": "browser",
   "refresh": "30s",
@@ -10,11 +10,21 @@
   "templating": {
     "list": [
       {
-        "name": "service",
+        "name": "agent",
         "type": "query",
-        "label": "Service",
+        "label": "Agent",
         "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
-        "query": "label_values(service_name)",
+        "query": "label_values(grafanagent_llm_calls_total, agent)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+        "query": "label_values(grafanagent_llm_calls_total, model)",
         "includeAll": true,
         "multi": true,
         "current": { "selected": true, "text": "All", "value": "$__all" }
@@ -31,56 +41,228 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Tokens (placeholder)",
-      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 }
+      "title": "Spend (last 1h, USD)",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(increase(grafanagent_llm_cost_usd_total{agent=~\"$agent\",model=~\"$model\"}[1h]))",
+          "legendFormat": "total",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3 } }
     },
     {
       "id": 3,
-      "type": "stat",
-      "title": "Estimated $ cost (placeholder)",
-      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 4 }
+      "type": "timeseries",
+      "title": "Cost rate by bucket",
+      "description": "input / output / cache_read / cache_write — quantifies prompt-caching savings at a glance.",
+      "gridPos": { "x": 6, "y": 1, "w": 18, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (bucket) (rate(grafanagent_llm_cost_usd_total{agent=~\"$agent\",model=~\"$model\"}[5m]))",
+          "legendFormat": "{{bucket}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] } }
     },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Tokens/sec (last 5m)",
+      "gridPos": { "x": 0, "y": 5, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(grafanagent_llm_tokens_total{agent=~\"$agent\",model=~\"$model\"}[5m]))",
+          "legendFormat": "tok/s",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 } }
+    },
+    {
+      "id": 5,
+      "type": "piechart",
+      "title": "Cost by model (last 1h)",
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (model) (increase(grafanagent_llm_cost_usd_total{agent=~\"$agent\"}[1h]))",
+          "legendFormat": "{{model}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "id": 6,
+      "type": "piechart",
+      "title": "Cost by agent (last 1h)",
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (agent) (increase(grafanagent_llm_cost_usd_total{model=~\"$model\"}[1h]))",
+          "legendFormat": "{{agent}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Top 10 most expensive signals (last 1h)",
+      "description": "One row per signal_id. Click through to Tempo via the signal_id trace filter.",
+      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (\"grafanagent.signal_id\") (increase(grafanagent_signal_cost_usd_total[1h])))",
+          "legendFormat": "{{grafanagent.signal_id}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "renameByName": { "grafanagent.signal_id": "signal_id", "Value": "usd" } } }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 } }
+    },
+
     {
       "id": 10,
       "type": "row",
-      "title": "Latency & success",
-      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
+      "title": "Latency & reliability",
+      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 1 }
     },
     {
       "id": 11,
       "type": "timeseries",
-      "title": "p95 latency by service (placeholder)",
-      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 }
+      "title": "LLM latency p50 / p95 / p99 by agent",
+      "description": "Derived from grafanagent_llm_latency_seconds histogram.",
+      "gridPos": { "x": 0, "y": 26, "w": 16, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (agent, le) (rate(grafanagent_llm_latency_seconds_bucket{agent=~\"$agent\",model=~\"$model\",outcome=\"ok\"}[5m])))",
+          "legendFormat": "p50 / {{agent}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (agent, le) (rate(grafanagent_llm_latency_seconds_bucket{agent=~\"$agent\",model=~\"$model\",outcome=\"ok\"}[5m])))",
+          "legendFormat": "p95 / {{agent}}",
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (agent, le) (rate(grafanagent_llm_latency_seconds_bucket{agent=~\"$agent\",model=~\"$model\",outcome=\"ok\"}[5m])))",
+          "legendFormat": "p99 / {{agent}}",
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
     },
     {
       "id": 12,
       "type": "stat",
-      "title": "Success rate (placeholder)",
-      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 }
+      "title": "Success rate (last 15m)",
+      "gridPos": { "x": 16, "y": 26, "w": 8, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(grafanagent_llm_calls_total{agent=~\"$agent\",model=~\"$model\",outcome=\"ok\"}[15m])) / clamp_min(sum(rate(grafanagent_llm_calls_total{agent=~\"$agent\",model=~\"$model\"}[15m])), 1e-9)",
+          "legendFormat": "success",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 0.95 },
+              { "color": "green", "value": 0.99 }
+            ]
+          }
+        }
+      }
     },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Call error rate",
+      "gridPos": { "x": 16, "y": 30, "w": 8, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(grafanagent_llm_calls_total{outcome=\"error\"}[5m])) / clamp_min(sum(rate(grafanagent_llm_calls_total[5m])), 1e-9)",
+          "legendFormat": "error_rate",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+
     {
       "id": 20,
       "type": "row",
-      "title": "Traces",
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }
+      "title": "Router fallback chain",
+      "gridPos": { "x": 0, "y": 34, "w": 24, "h": 1 }
     },
     {
       "id": 21,
-      "type": "traces",
-      "title": "Recent agent traces (Tempo, placeholder)",
-      "gridPos": { "x": 0, "y": 15, "w": 24, "h": 10 }
+      "type": "timeseries",
+      "title": "Fallback rung usage",
+      "description": "Which rung (haiku / sonnet / rule / hitl) resolved each signal. Spikes on sonnet + hitl flag prompt drift.",
+      "gridPos": { "x": 0, "y": 35, "w": 16, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (rung) (rate(grafanagent_router_rung_total[5m]))",
+          "legendFormat": "{{rung}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ]
     },
+    {
+      "id": 22,
+      "type": "bargauge",
+      "title": "Rung share (last 1h)",
+      "gridPos": { "x": 16, "y": 35, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (rung) (increase(grafanagent_router_rung_total[1h]))",
+          "legendFormat": "{{rung}}",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
+        }
+      ]
+    },
+
     {
       "id": 30,
       "type": "row",
       "title": "Eval (golden set)",
-      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 1 }
+      "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 }
     },
     {
       "id": 31,
       "type": "gauge",
       "title": "Pass rate (llm mode, last run)",
-      "gridPos": { "x": 0, "y": 26, "w": 8, "h": 6 },
+      "gridPos": { "x": 0, "y": 44, "w": 8, "h": 6 },
       "targets": [
         {
           "expr": "grafanagent_eval_pass_rate{set=\"golden_set\", mode=\"llm\"}",
@@ -108,7 +290,7 @@
       "id": 32,
       "type": "timeseries",
       "title": "Mean judge score by dimension",
-      "gridPos": { "x": 8, "y": 26, "w": 16, "h": 6 },
+      "gridPos": { "x": 8, "y": 44, "w": 16, "h": 6 },
       "targets": [
         {
           "expr": "grafanagent_eval_judge_score{set=\"golden_set\", mode=\"llm\"}",
@@ -117,15 +299,13 @@
           "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
         }
       ],
-      "fieldConfig": {
-        "defaults": { "min": 0, "max": 5 }
-      }
+      "fieldConfig": { "defaults": { "min": 0, "max": 5 } }
     },
     {
       "id": 33,
       "type": "bargauge",
       "title": "Pass rate by skill",
-      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 6 },
+      "gridPos": { "x": 0, "y": 50, "w": 24, "h": 6 },
       "targets": [
         {
           "expr": "grafanagent_eval_per_skill_pass_rate{set=\"golden_set\", mode=\"llm\"}",
@@ -134,9 +314,29 @@
           "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" }
         }
       ],
-      "fieldConfig": {
-        "defaults": { "min": 0, "max": 1, "unit": "percentunit" }
-      }
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" } }
+    },
+
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Traces (Tempo)",
+      "gridPos": { "x": 0, "y": 56, "w": 24, "h": 1 }
+    },
+    {
+      "id": 41,
+      "type": "traces",
+      "title": "Recent agent traces — click a span to see prompt + completion",
+      "description": "Tempo query pulls the last hour of traces tagged with service.namespace=grafanagent. Every anthropic.* span carries the gen_ai.prompt / gen_ai.completion events.",
+      "gridPos": { "x": 0, "y": 57, "w": 24, "h": 10 },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "grafanacloud-traces" },
+          "query": "{ resource.service.namespace = \"grafanagent\" }",
+          "queryType": "traceql",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }

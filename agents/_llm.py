@@ -2,19 +2,27 @@
 
 Every LLM call in GrafanAgent goes through here so it inherits:
 
-- OTel spans following the genai semantic conventions (gen_ai.* attrs)
-- Token + dollar cost recorded as both span attrs and a Mimir counter metric
-- Optional structured output via Anthropic tool-forcing
-- Optional prompt caching on system messages (`cache_system=True`)
-- Tenacity retries on transient API errors
+- OTel spans following the genai semantic conventions (gen_ai.* attrs),
+  including cache-read / cache-creation tokens and the list of tools offered.
+- Token + dollar cost recorded as both span attrs and Mimir counters,
+  broken down by cache vs non-cache buckets for the Grafana cost panel.
+- Latency recorded as a histogram so the dashboard gets real p50/p95/p99
+  derived from metrics, not trace-sampling.
+- Per-signal attribution via `observability.signal_context(...)` — the
+  active signal_id rides on every metric label and span attr.
+- Optional structured output via Anthropic tool-forcing.
+- Optional prompt caching on system messages (`cache_system=True`).
+- Tenacity retries on transient API errors.
 
-The wrapper is intentionally thin — it does not hide the Anthropic SDK; agents
-still see real `Message` objects. We only wrap the things every call needs.
+The wrapper is intentionally thin — it does not hide the Anthropic SDK;
+agents still see real `Message` objects. We only wrap the things every call
+needs.
 """
 from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any
 
 from anthropic import APIError, APIStatusError, AsyncAnthropic
@@ -29,7 +37,8 @@ from tenacity import (
     wait_exponential,
 )
 
-from observability.cost import cost_usd
+from observability.cost import cost_breakdown
+from observability.signal_ctx import current_signal_id
 
 _tracer = trace.get_tracer("agents._llm")
 _meter = metrics.get_meter("agents._llm")
@@ -47,6 +56,19 @@ _cost_counter = _meter.create_counter(
 _call_counter = _meter.create_counter(
     "grafanagent_llm_calls_total",
     description="Number of LLM calls dispatched.",
+)
+_latency_hist = _meter.create_histogram(
+    "grafanagent_llm_latency_seconds",
+    unit="s",
+    description="Wall-clock latency of Anthropic messages.create calls.",
+)
+_signal_cost_counter = _meter.create_counter(
+    "grafanagent_signal_cost_usd_total",
+    unit="USD",
+    description=(
+        "USD spend attributed to a single signal. Drives the per-signal cost "
+        "panel and the cost-spike alert."
+    ),
 )
 
 
@@ -174,6 +196,11 @@ class LLMClient:
         if tool_choice:
             kwargs["tool_choice"] = tool_choice
 
+        signal_id = current_signal_id()
+        base_attrs: dict[str, Any] = {"agent": self._agent, "model": model}
+        if signal_id:
+            base_attrs["grafanagent.signal_id"] = signal_id
+
         with _tracer.start_as_current_span(f"anthropic.{operation}") as span:
             span.set_attribute("gen_ai.system", "anthropic")
             span.set_attribute("gen_ai.operation.name", operation)
@@ -181,33 +208,88 @@ class LLMClient:
             span.set_attribute("gen_ai.request.max_tokens", max_tokens)
             span.set_attribute("gen_ai.request.temperature", temperature)
             span.set_attribute("grafanagent.agent", self._agent)
+            if signal_id:
+                span.set_attribute("grafanagent.signal_id", signal_id)
+            if tools:
+                span.set_attribute("gen_ai.tools", [t.get("name", "") for t in tools])
+            if tool_choice:
+                span.set_attribute("gen_ai.request.tool_choice", tool_choice.get("name") or tool_choice.get("type", ""))
             span.add_event("gen_ai.prompt", {"messages_json": _safe_json(messages)})
 
+            started = time.perf_counter()
             try:
                 message = await self._client.messages.create(**kwargs)
             except Exception as exc:
+                elapsed = time.perf_counter() - started
                 span.set_status(Status(StatusCode.ERROR, str(exc)))
-                _call_counter.add(1, {"agent": self._agent, "model": model, "outcome": "error"})
+                _latency_hist.record(elapsed, {**base_attrs, "outcome": "error"})
+                _call_counter.add(1, {**base_attrs, "outcome": "error"})
                 raise
 
-            usage_in = getattr(message.usage, "input_tokens", 0) or 0
-            usage_out = getattr(message.usage, "output_tokens", 0) or 0
-            usd = cost_usd(model, usage_in, usage_out)
+            elapsed = time.perf_counter() - started
+            usage = message.usage
+            usage_in = getattr(usage, "input_tokens", 0) or 0
+            usage_out = getattr(usage, "output_tokens", 0) or 0
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
 
+            breakdown = cost_breakdown(
+                model,
+                input_tokens=usage_in,
+                output_tokens=usage_out,
+                cache_creation_tokens=cache_create,
+                cache_read_tokens=cache_read,
+            )
+            total_usd = breakdown.total_usd
+
+            # ---- span attrs (OTel genai semantic conventions) ----
             span.set_attribute("gen_ai.response.id", message.id)
             span.set_attribute("gen_ai.response.model", message.model)
             if message.stop_reason:
                 span.set_attribute("gen_ai.response.finish_reasons", [message.stop_reason])
             span.set_attribute("gen_ai.usage.input_tokens", usage_in)
             span.set_attribute("gen_ai.usage.output_tokens", usage_out)
-            span.set_attribute("grafanagent.cost_usd", usd)
+            if cache_read:
+                span.set_attribute("gen_ai.usage.cache_read_input_tokens", cache_read)
+            if cache_create:
+                span.set_attribute("gen_ai.usage.cache_creation_input_tokens", cache_create)
+            span.set_attribute("grafanagent.cost_usd", total_usd)
+            span.set_attribute("grafanagent.cost_usd.input", breakdown.input_usd)
+            span.set_attribute("grafanagent.cost_usd.output", breakdown.output_usd)
+            if breakdown.cache_read_usd:
+                span.set_attribute("grafanagent.cost_usd.cache_read", breakdown.cache_read_usd)
+            if breakdown.cache_write_usd:
+                span.set_attribute("grafanagent.cost_usd.cache_write", breakdown.cache_write_usd)
+            span.set_attribute("grafanagent.latency_s", elapsed)
             span.add_event("gen_ai.completion", {"content_json": _safe_json(_serialize_content(message))})
 
-            attrs = {"agent": self._agent, "model": model}
-            _tokens_counter.add(usage_in, {**attrs, "direction": "input"})
-            _tokens_counter.add(usage_out, {**attrs, "direction": "output"})
-            _cost_counter.add(usd, attrs)
-            _call_counter.add(1, {**attrs, "outcome": "ok"})
+            # ---- metrics ----
+            _tokens_counter.add(usage_in, {**base_attrs, "direction": "input"})
+            _tokens_counter.add(usage_out, {**base_attrs, "direction": "output"})
+            if cache_read:
+                _tokens_counter.add(cache_read, {**base_attrs, "direction": "cache_read"})
+            if cache_create:
+                _tokens_counter.add(cache_create, {**base_attrs, "direction": "cache_write"})
+
+            _cost_counter.add(breakdown.input_usd, {**base_attrs, "bucket": "input"})
+            _cost_counter.add(breakdown.output_usd, {**base_attrs, "bucket": "output"})
+            if breakdown.cache_read_usd:
+                _cost_counter.add(breakdown.cache_read_usd, {**base_attrs, "bucket": "cache_read"})
+            if breakdown.cache_write_usd:
+                _cost_counter.add(breakdown.cache_write_usd, {**base_attrs, "bucket": "cache_write"})
+
+            _latency_hist.record(elapsed, {**base_attrs, "outcome": "ok"})
+            _call_counter.add(1, {**base_attrs, "outcome": "ok"})
+
+            if signal_id and total_usd > 0:
+                _signal_cost_counter.add(
+                    total_usd,
+                    {
+                        "agent": self._agent,
+                        "model": model,
+                        "grafanagent.signal_id": signal_id,
+                    },
+                )
 
             return message
 

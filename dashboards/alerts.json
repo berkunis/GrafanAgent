@@ -96,6 +96,193 @@
           }
         }
       ]
+    },
+    {
+      "name": "grafanagent-runtime",
+      "folder": "GrafanAgent",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "grafanagent-cost-spike",
+          "title": "GrafanAgent LLM cost spike",
+          "condition": "spike",
+          "data": [
+            {
+              "refId": "spend",
+              "datasourceUid": "grafanacloud-prom",
+              "relativeTimeRange": { "from": 3600, "to": 0 },
+              "model": {
+                "expr": "sum(increase(grafanagent_llm_cost_usd_total[1h]))",
+                "instant": true,
+                "legendFormat": "usd_per_hour",
+                "refId": "spend"
+              }
+            },
+            {
+              "refId": "spike",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "expression": "spend",
+                "conditions": [
+                  {
+                    "evaluator": { "params": [5.0], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "type": "query"
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "10m",
+          "no_data_state": "OK",
+          "annotations": {
+            "summary": "LLM spend exceeded $5/hour.",
+            "description": "A prompt loop or runaway eval can drain the Anthropic budget quickly. Check the cost-by-model panel + recent deploys.",
+            "runbook_url": "https://github.com/berkunis/GrafanAgent/blob/main/docs/runbook.md#cost-spike"
+          },
+          "labels": {
+            "service": "grafanagent",
+            "surface": "llm",
+            "severity": "warn"
+          }
+        },
+        {
+          "uid": "grafanagent-latency-p95",
+          "title": "GrafanAgent LLM p95 latency > 5s",
+          "condition": "slow",
+          "data": [
+            {
+              "refId": "p95",
+              "datasourceUid": "grafanacloud-prom",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "model": {
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(grafanagent_llm_latency_seconds_bucket{outcome=\"ok\"}[5m])))",
+                "instant": true,
+                "legendFormat": "p95_seconds",
+                "refId": "p95"
+              }
+            },
+            {
+              "refId": "slow",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "expression": "p95",
+                "conditions": [
+                  {
+                    "evaluator": { "params": [5.0], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "type": "query"
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "5m",
+          "no_data_state": "OK",
+          "annotations": {
+            "summary": "Anthropic p95 latency sustained above 5s for 5 minutes.",
+            "description": "Either Anthropic is degraded or our prompt size grew. Check the latency panel and the span trace for the slow calls.",
+            "runbook_url": "https://github.com/berkunis/GrafanAgent/blob/main/docs/runbook.md#latency"
+          },
+          "labels": {
+            "service": "grafanagent",
+            "surface": "llm",
+            "severity": "warn"
+          }
+        },
+        {
+          "uid": "grafanagent-error-rate",
+          "title": "GrafanAgent LLM call error rate > 5%",
+          "condition": "errors",
+          "data": [
+            {
+              "refId": "rate",
+              "datasourceUid": "grafanacloud-prom",
+              "relativeTimeRange": { "from": 600, "to": 0 },
+              "model": {
+                "expr": "sum(rate(grafanagent_llm_calls_total{outcome=\"error\"}[10m])) / clamp_min(sum(rate(grafanagent_llm_calls_total[10m])), 1e-9)",
+                "instant": true,
+                "legendFormat": "error_rate",
+                "refId": "rate"
+              }
+            },
+            {
+              "refId": "errors",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "expression": "rate",
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.05], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "type": "query"
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "10m",
+          "no_data_state": "OK",
+          "annotations": {
+            "summary": "More than 5% of LLM calls failed in the last 10 minutes.",
+            "description": "Likely Anthropic outage or expired key. Check the LLM call outcome panel.",
+            "runbook_url": "https://github.com/berkunis/GrafanAgent/blob/main/docs/runbook.md#llm-errors"
+          },
+          "labels": {
+            "service": "grafanagent",
+            "surface": "llm",
+            "severity": "page"
+          }
+        },
+        {
+          "uid": "grafanagent-hitl-escalation-spike",
+          "title": "GrafanAgent HITL escalations spiked",
+          "condition": "spike",
+          "data": [
+            {
+              "refId": "escalations",
+              "datasourceUid": "grafanacloud-prom",
+              "relativeTimeRange": { "from": 900, "to": 0 },
+              "model": {
+                "expr": "sum(rate(grafanagent_router_rung_total{rung=\"hitl\"}[15m])) / clamp_min(sum(rate(grafanagent_router_rung_total[15m])), 1e-9)",
+                "instant": true,
+                "legendFormat": "hitl_share",
+                "refId": "escalations"
+              }
+            },
+            {
+              "refId": "spike",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "expression": "escalations",
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.2], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "type": "query"
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "15m",
+          "no_data_state": "OK",
+          "annotations": {
+            "summary": "More than 20% of signals escalated to HITL in the last 15m.",
+            "description": "Either an unknown signal type appeared or the LLM confidence calibration drifted. Check the rule-table signals + the latest nightly eval.",
+            "runbook_url": "https://github.com/berkunis/GrafanAgent/blob/main/docs/runbook.md#hitl-escalation-spike"
+          },
+          "labels": {
+            "service": "grafanagent",
+            "surface": "router",
+            "severity": "warn"
+          }
+        }
+      ]
     }
   ]
 }

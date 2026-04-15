@@ -43,7 +43,7 @@ from agents.lifecycle.schemas import (
     PlaybookHit,
     UserContext,
 )
-from observability import get_logger
+from observability import get_logger, signal_context
 from rag.retriever import Retriever
 
 _tracer = trace.get_tracer("agents.lifecycle.orchestrator")
@@ -70,7 +70,13 @@ class LifecycleOrchestrator:
 
     async def run(self, task: LifecycleTask) -> LifecycleOutput:
         start = time.perf_counter()
-        with _tracer.start_as_current_span("lifecycle.run") as span:
+        # The router already set signal_context on its entrypoint, but the
+        # lifecycle agent can also be invoked directly by the CLI or tests,
+        # so re-scope here to make per-signal cost attribution robust.
+        with (
+            signal_context(task.signal.id, task.signal.type),
+            _tracer.start_as_current_span("lifecycle.run") as span,
+        ):
             span.set_attribute("grafanagent.signal_id", task.signal.id)
             span.set_attribute("grafanagent.signal_type", task.signal.type)
             span.set_attribute("grafanagent.user_id", task.signal.user_id or "")
