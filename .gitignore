@@ -41,3 +41,6 @@ crash.log
 
 # OTel local exports
 otel-traces.json
+
+# Private context — never commit JD or interview-strategy notes
+docs/role.md
