@@ -1,10 +1,10 @@
 # Project context for Claude
 
 ## What this is
-GrafanAgent — a portfolio/interview project for a **Staff AI Engineer (AI & Automation)** role at Grafana Labs. Hiring manager: Ryan, Staff AI Growth Engineer. Full JD at `docs/role.md` (gitignored — private context only).
+GrafanAgent — a multi-agent marketing-ops copilot on GCP. Signals fire (BQ / Pub/Sub / webhook), a router classifies them, skill agents produce drafts, humans approve via Slack, and the result executes against Customer.io. Every decision is observable in the Grafana LGTM stack.
 
 ## Why it exists
-Demonstrate end-to-end ability to ship multi-agent AI systems on GCP that connect marketing/ops platforms (Customer.io, Salesforce, BigQuery, Slack), with **the Grafana LGTM stack as the AI observability layer** — that last bit is the differentiator.
+End-to-end demonstration of multi-agent AI systems on GCP that connect marketing/ops platforms (Customer.io, BigQuery, Slack), with **the Grafana LGTM stack as the AI observability layer** — that last bit is the differentiator.
 
 ## What's done
 - **All 9 phases shipped.** 154 Python tests + 17 TypeScript tests green; ruff clean.
@@ -21,7 +21,7 @@ Demonstrate end-to-end ability to ship multi-agent AI systems on GCP that connec
 - LICENSE (MIT) + CONTRIBUTING.md + SECURITY.md + blog post + seed good-first-issues list.
 - Repo public at https://github.com/berkunis/GrafanAgent.
 
-## MVP scope (JD-aligned, executes in 9 phases)
+## MVP scope (executes in 9 phases)
 
 The full build plan lives at `~/.claude/plans/vast-swimming-bachman.md`. Phases are reviewed and committed individually.
 
@@ -29,8 +29,8 @@ The full build plan lives at `~/.claude/plans/vast-swimming-bachman.md`. Phases 
 2. **Lifecycle Personalization agent** (Sonnet) — first end-to-end skill agent, uses **parallel fan-out** (asyncio.gather) across BQ + RAG + Customer.io
 3. **3 MCP servers** — BigQuery (read, allow-list, PII redaction), Customer.io (sandbox writes, idempotent), Slack (post + approval)
 4. **RAG layer** — pgvector on Cloud SQL, **Vertex AI `text-embedding-004`** (GCP-native), corpus of lifecycle playbooks
-5. **TypeScript Slack Bolt app** — Block Kit approval cards, HITL state machine (closes JS/Node + frontend signal in one move)
-6. **`grafanagent` CLI** — `trigger`, `replay`, `list`, `describe`, `eval` (closes "skills invoked across CLIs")
+5. **TypeScript Slack Bolt app** — Block Kit approval cards, HITL state machine
+6. **`grafanagent` CLI** — `trigger`, `replay`, `list`, `describe`, `eval`
 7. **Eval harness** — golden set + Sonnet judge + Mimir metric + Grafana regression alert + GitHub Actions integration
 8. **OTel instrumentation → Grafana Cloud** — Tempo / Loki / Mimir, using **OTel genai semantic conventions** so spans carry prompt/completion/token/cost attrs
 9. **One Grafana dashboard** — cost ($/hr, $/signal, by model), latency p50/p95/p99, success rate, eval pass rate, trace explorer that drills span → prompt
@@ -44,7 +44,6 @@ The full build plan lives at `~/.claude/plans/vast-swimming-bachman.md`. Phases 
 - Don't hit real Salesforce/Customer.io. Sandbox/mock writes only.
 - Don't reach for LangChain / CrewAI / n8n / Temporal — Anthropic SDK + MCP + Pub/Sub + Cloud Run is the bet. Document the *why* in DESIGN.md.
 - Don't add real customer data anywhere. Synthetic users only; PII redaction exists for demo authenticity.
-- Don't surface interview-strategy framing in committed files. Pitch as a real project.
 
 ## Stack defaults
 - **Python** for agents and MCP servers; **TypeScript** for the Slack Bolt app
@@ -56,8 +55,6 @@ The full build plan lives at `~/.claude/plans/vast-swimming-bachman.md`. Phases 
 
 ## Working notes
 - User is Isil Berkun (founder of DigiFab.ai). Treat as senior engineer; skip basics, surface trade-offs.
-- Public repo — keep interview-strategy framing OUT of committed files. Pitch as a real project, not "an interview demo." `docs/role.md` is gitignored.
-- **Phases 0–9 complete.** The application-ready state.
+- **Phases 0–9 complete.**
 - Current plan file (phases + rationale): `~/.claude/plans/vast-swimming-bachman.md`.
-- Original brainstorm plan (with interview strategy): `~/.claude/plans/eager-toasting-wadler.md`.
 - Next meaningful work: actually deploying to GCP (requires user credentials), or follow-on PRs from `docs/FIRST_ISSUES.md` if inviting contributors.

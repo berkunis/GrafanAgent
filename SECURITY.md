@@ -14,7 +14,7 @@ You'll get an acknowledgement within 72 hours and a status update within 7 days.
 
 ## Scope
 
-GrafanAgent is a portfolio / reference project, not a production service. The code is built as a real-world template — the guardrails (sandbox flags, PII scrubber, secret-manager mounts, Block Kit signing-secret auth) are there because bypassing them in a fork could cause real damage, not because I'm operating a bug-bounty program.
+GrafanAgent is a reference project, not a production service. The code is built as a real-world template — the guardrails (sandbox flags, PII scrubber, secret-manager mounts, Block Kit signing-secret auth) are there because bypassing them in a fork could cause real damage, not because I'm operating a bug-bounty program.
 
 In-scope findings we want to hear about:
 

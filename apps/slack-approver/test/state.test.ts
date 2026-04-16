@@ -75,7 +75,7 @@ describe('state machine', () => {
         body_markdown: 'New body',
         call_to_action: 'New CTA',
       },
-      'ryan'
+      'operator-1'
     );
     expect(edited.state).toBe('posted');
     expect(edited.draft.subject).toBe('New subject');

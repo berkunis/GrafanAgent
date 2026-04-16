@@ -75,7 +75,7 @@ GrafanAgent's router uses an explicit four-rung ladder:
 
 Every rung increments a Mimir counter labelled by rung. The Grafana dashboard shows rung usage as a timeseries, which immediately surfaces prompt drift: if sonnet + rule escalations spike, the Haiku prompt has gotten less calibrated. We fire an alert when HITL share exceeds 20 percent over 15 minutes.
 
-The JD at Grafana Labs calls out "confidence thresholds, fallback logic, human escalation" as a specific production-mitigation requirement. The explicit-ladder version is the JD version, not the "ask LLM, check number, maybe page" version.
+Any production LLM path needs named mitigations for low-confidence outputs. "Confidence threshold + fallback + escalation" is the canonical trio, but the common implementation is "ask LLM, check a number, maybe page someone" — which collapses the three into one decision at one threshold. The explicit-ladder version keeps each rung a first-class, countable, alertable unit.
 
 ---
 
@@ -93,13 +93,13 @@ This closes the loop the demos leave open. Prompt changes go through the same re
 
 ## The HITL state machine
 
-Human-in-the-loop is where the JD and the real world both get serious. GrafanAgent's HITL gate is a TypeScript Slack Bolt app with a full state machine — `draft → posted → approved | rejected | edited | timed_out → executed | cancelled`. Disallowed transitions throw. A stale-approval reaper moves anything past its TTL to `timed_out`.
+Human-in-the-loop is where things get serious. GrafanAgent's HITL gate is a TypeScript Slack Bolt app with a full state machine — `draft → posted → approved | rejected | edited | timed_out → executed | cancelled`. Disallowed transitions throw. A stale-approval reaper moves anything past its TTL to `timed_out`.
 
 The UI is Block Kit: a rich approval card with user context, draft preview, approve / reject / edit buttons, and a three-field edit modal. When an operator edits a draft, the new content round-trips through the Python orchestrator into the outbound Customer.io payload — the edit is authoritative, not advisory.
 
 Two things worth calling out. First, the HITL policy varies by skill. Lifecycle gates every draft. Lead-scoring gates only high-priority SDR alerts — medium fires without a human gate, low drops to nurture silently because the playbook says "do not ping a human." Attribution has no HITL at all because the reports are informational. Three skills, three policies, one state machine.
 
-Second, the Bolt app is TypeScript. The JD requires "strong proficiency in Python and JavaScript/Node.js" — splitting the user-facing surface into TS gives a real, non-trivial Node service instead of a token Hello World.
+Second, the Bolt app is TypeScript. Slack's Bolt SDK has first-class TypeScript support; Block Kit modals are natural in the language the ecosystem treats as primary. Splitting the user-facing surface off the Python runtime also means the HITL channel is isolated by a process boundary, not just a function boundary — one less thing that can go wrong during a deploy.
 
 ---
 
@@ -113,13 +113,13 @@ Second, the Bolt app is TypeScript. The JD requires "strong proficiency in Pytho
 
 ---
 
-## What this unlocks for the team
+## What this unlocks
 
-The Grafana team already runs the LGTM stack for production observability. An AI workload built this way is just another thing you watch on the same dashboards you already have open during an incident. When someone asks "is the lifecycle agent expensive?" the answer is not "let me pull it up in LangSmith" — it's "it's on the cost panel next to the API latency graph."
+If you already run the LGTM stack for production observability, an AI workload built this way is just another thing you watch on the same dashboards you already have open during an incident. When someone asks "is the lifecycle agent expensive?" the answer is not "let me pull it up in LangSmith" — it's "it's on the cost panel next to the API latency graph."
 
 That is the integration I care about. AI systems are not special infrastructure. They should be observable the same way everything else is. The LGTM stack does not need a special mode for AI. You just need to emit the right telemetry, from the right layer, once.
 
-The repo, tests, dashboards, and runbooks are all at **github.com/berkunis/GrafanAgent**. Built with Claude Code — [the JD recommends using AI to build AI](https://grafana.com/about/careers/), and this repo is what that looks like when you apply the same engineering discipline to both.
+The repo, tests, dashboards, and runbooks are all at **github.com/berkunis/GrafanAgent**. Built with Claude Code — the authorship model is a working artefact of the collaboration: every line has a human owner who read it, wrote the "why" in the commit message, and answers questions on the review.
 
 ---
 

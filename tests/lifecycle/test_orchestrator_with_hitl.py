@@ -118,7 +118,7 @@ async def test_hitl_approved_triggers_execution(retriever):
 async def test_hitl_rejected_skips_execution(retriever):
     routes = _enrichment_routes() | {
         ("slack", "request_approval"): {"hitl_id": "hitl_2", "state": "posted"},
-        ("slack", "wait_for_approval"): {"state": "rejected", "decided_by": "ryan"},
+        ("slack", "wait_for_approval"): {"state": "rejected", "decided_by": "operator-1"},
     }
     mcp = ScriptedMcp(routes)
     llm = LLMClient(client=FakeAnthropic([_synthesis()]), agent="lifecycle")  # type: ignore[arg-type]
@@ -155,7 +155,7 @@ async def test_operator_edits_flow_into_execution_payload(retriever):
         ("slack", "request_approval"): {"hitl_id": "hitl_4", "state": "posted"},
         ("slack", "wait_for_approval"): {
             "state": "approved",
-            "decided_by": "ryan",
+            "decided_by": "operator-1",
             "draft": {"subject": edited_subject},
         },
         ("slack", "mark_executed"): {"state": "executed"},

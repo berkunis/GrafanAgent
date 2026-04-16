@@ -1,6 +1,6 @@
 # Contributing to GrafanAgent
 
-Thanks for taking a look. This is a working portfolio project — the doors are open to fixes, clarifications, and new skill agents. Bigger architectural changes are worth opening an issue on first.
+Thanks for taking a look. The doors are open to fixes, clarifications, and new skill agents. Bigger architectural changes are worth opening an issue on first.
 
 ## Dev setup
 
@@ -45,7 +45,7 @@ Follow [`docs/adding_a_new_skill.md`](docs/adding_a_new_skill.md). The template 
 
 - One commit per logical change. Small is better.
 - The body explains **why** first, **what** second. Assume the reader is coming to the diff six months later.
-- Every commit includes a `Co-Authored-By:` line if AI-assisted; see recent commits for the shape. Grafana Labs' own JD calls out using AI to build AI — we practice what we preach, transparently.
+- Every commit includes a `Co-Authored-By:` line if AI-assisted; see recent commits for the shape.
 
 Claude Code does most of this repo's typing. The authorship model: every PR still has a human owner who reads every line, writes the "why" in the commit message, and answers questions on the review. See [`docs/DESIGN.md`](docs/DESIGN.md) for why that matters to us.
 

@@ -202,7 +202,7 @@ grafanagent trigger signal.json -u $URL   # POST → deployed router
 grafanagent replay signal.json            # replay a stored signal (prompt regression)
 ```
 
-This closes the JD's "reusable agentic skills invoked across Slack, dashboards, internal apps, **CLIs**" line. `grafanagent eval` is also the CI gate that Phase 5 now layers a Sonnet judge on top of — see `.github/workflows/ci.yml` (rule-mode on every PR) and `.github/workflows/eval-nightly.yml` (LLM-judge at 09:00 UTC with Mimir metrics).
+Agents should be invokable from wherever operators live — Slack, dashboards, internal apps, **and CLIs**. A real console script keeps the CLI path first-class rather than a hand-run shim. `grafanagent eval` is also the CI gate Phase 5 layers a Sonnet judge on top of — see `.github/workflows/ci.yml` (rule-mode on every PR) and `.github/workflows/eval-nightly.yml` (LLM-judge at 09:00 UTC with Mimir metrics).
 
 ### 5. Drive the Slack approval app by HTTP (no Slack token required)
 
@@ -425,7 +425,7 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the full rationale — 16 decisions w
 
 ## Built with Claude Code
 
-Every commit in this repo's history ships with a `Co-Authored-By:` line crediting Claude. The authorship model is simple: every line of code has a human owner who read it, wrote the "why" in the commit message, and answers questions on the review. The JD at Grafana Labs explicitly encourages using AI to build AI — this repo is what that looks like when you apply real engineering discipline to both sides. The `git log` is a working artefact of the collaboration.
+Every commit in this repo's history ships with a `Co-Authored-By:` line crediting Claude. The authorship model is simple: every line of code has a human owner who read it, wrote the "why" in the commit message, and answers questions on the review. The `git log` is a working artefact of the collaboration.
 
 ---
 

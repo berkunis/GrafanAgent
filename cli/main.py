@@ -11,8 +11,9 @@ Wires each subcommand as its own Typer app for clean --help output, e.g.:
     grafanagent describe mcp bigquery
     grafanagent eval [--golden-set evals/golden_set.jsonl]
 
-Closes the JD requirement "Develop reusable agentic skills that agents invoke
-across interfaces (Slack, dashboards, internal apps, CLIs)."
+Exposes every agent skill through a unified CLI so operators can trigger,
+replay, list, describe, and evaluate runs without hitting the HTTP surface
+directly.
 """
 from __future__ import annotations
 

@@ -177,7 +177,7 @@ async def test_low_priority_does_not_execute(retriever):
 async def test_rejected_high_priority_does_not_fire(retriever):
     routes = _bq_routes() | {
         ("slack", "request_approval"): {"hitl_id": "hitl_ls_reject", "state": "posted"},
-        ("slack", "wait_for_approval"): {"state": "rejected", "decided_by": "ryan"},
+        ("slack", "wait_for_approval"): {"state": "rejected", "decided_by": "operator-1"},
     }
     mcp = ScriptedMcp(routes)
     llm = LLMClient(client=FakeAnthropic([_score_response("high")]), agent="lead_scoring")  # type: ignore[arg-type]

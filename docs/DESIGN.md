@@ -14,7 +14,6 @@ We bet on the **Anthropic SDK + Model Context Protocol (MCP)** directly rather t
 - **Observability surface area.** Every framework abstraction is a place where OTel attribution gets lossy. MCP is a thin wire protocol; we own the spans.
 - **Native to the model provider.** MCP is Anthropic-first; staying close to the vendor's primitives means fewer impedance mismatches and faster access to new features (tool use, prompt caching, structured output).
 - **Skill composability without re-implementation.** A BigQuery MCP server is reusable across all four agents without per-agent client code or framework-specific adapters.
-- **The JD lists frameworks as examples, not requirements.** "LangChain, CrewAI, Anthropic MCP, or similar" — picking the most direct option is itself a signal.
 
 **When we'd reconsider:** if we needed multi-provider routing across Anthropic + OpenAI + Gemini in production, a thin abstraction layer would help. We don't, so we don't pay for it.
 
@@ -47,7 +46,7 @@ Router confidence drives an explicit degradation ladder:
 | Rule miss | Send to HITL queue (Slack approval card asking for human classification) |
 
 **Reasoning:**
-- The JD names "confidence thresholds, fallback logic, human escalation" as a specific production-mitigation requirement.
+- Any production LLM path needs named mitigations for low-confidence outputs; "confidence threshold + fallback + escalation" is the canonical trio.
 - A silent fallback is worse than no fallback — we want every degradation to be a Tempo span you can count and alert on (`router.fallback_used{rung=...}`).
 - Deterministic rules give us a non-LLM safety net for known signal types so we never page a human for an unambiguous case.
 
@@ -61,7 +60,7 @@ The lifecycle agent issues **three concurrent MCP tool calls** (BQ user enrichme
 
 **Reasoning:**
 - All three are read-only, independent, and required for the synthesis prompt — sequential would waste latency.
-- Demonstrates the JD's named pattern: "parallel fan-out".
+- Parallel fan-out is the right orchestration pattern when every leg is a dependency of the next step and none depend on each other.
 - The synthesis call is cache-friendly (same system prompt + retrieved playbooks per signal type), so prompt caching + parallel fan-out compound the latency win.
 
 **Trade-off:** error handling is harder. If one of the three fails we choose to proceed with partial context rather than fail-closed (and we annotate the trace so the dashboard can count partial-context completions).
@@ -89,8 +88,7 @@ The Slack HITL UI is a **TypeScript Bolt app** sitting alongside the Python serv
 
 **Reasoning:**
 - Slack Bolt has first-class TypeScript support; the Python Bolt SDK is a step behind for Block Kit interactivity.
-- The JD requires "Strong proficiency in Python and JavaScript/Node.js" — splitting the user-facing surface into TS gives us a real, non-trivial Node service rather than a token Hello World.
-- Block Kit + interactivity is the natural place to demonstrate the "frontend frameworks" bonus.
+- Block Kit + modal interactivity belongs in the language the ecosystem treats as first-class, not a port of a port.
 - Architectural cleanliness: the user-facing channel is isolated from the agent runtime by a process boundary, not just a function boundary.
 
 ---
@@ -102,7 +100,7 @@ The Slack HITL UI is a **TypeScript Bolt app** sitting alongside the Python serv
 A golden set, an LLM-judge, a Mimir metric, a Grafana alert, and a GitHub Actions PR check — the same regression bar code changes face.
 
 **Reasoning:**
-- The JD lists "model evaluation, prompt iteration" alongside logging and metrics. They're treated as one observability stack.
+- Model evaluation belongs in the same observability stack as logging and metrics — otherwise quality regressions only surface in production incidents.
 - Without an eval gate, prompt changes are unreviewed merges by definition. With one, prompts are first-class engineering artifacts.
 - Pushing eval results into Mimir means the same dashboard that shows cost and latency shows quality, and the same alerting fabric flags regressions.
 
@@ -156,7 +154,7 @@ We use Grafana's stack to observe AI workloads, not generic AI-observability too
 
 **Reasoning:**
 - **Context survives `asyncio.gather`.** Python's contextvars propagate through task boundaries by default, which is exactly what lifecycle's parallel fan-out needs. An explicit argument-threading approach would have meant plumbing a `signal_id` through every MCP call — ugly and error-prone.
-- **"What did this one signal cost?"** is the single most useful question in a per-user cost demo, and answering it well is the thing that will surprise a reviewer during the interview.
+- **"What did this one signal cost?"** is the single most useful question in a per-user cost view, and a dedicated counter keyed on `signal_id` answers it directly instead of requiring a trace-to-metric correlation step.
 
 ---
 
@@ -219,7 +217,7 @@ The push subscription retries for up to 10 minutes with exponential backoff; aft
 The CLI is installed as a console script via `pyproject.toml`'s `[project.scripts]`. Five subcommands: `trigger`, `replay`, `list`, `describe`, `eval`.
 
 **Reasoning:**
-- **The JD explicitly lists CLIs alongside Slack + dashboards as skill-invocation surfaces.** Building it this way — not as a standalone script — means the agent surface is genuinely multi-modal.
+- **Operators live everywhere.** Slack, dashboards, internal apps, CLIs — the agent surface is first-class across all four, not just the dashboard. A console script keeps the CLI path first-class instead of a bash shim.
 - **Grep-able registry.** `cli/_registry.py::AGENTS` is a dataclass list, not a decorator auto-discovery. Renaming an agent fails loudly at import time, not silently at command-dispatch.
 - **`grafanagent eval --mode rule` is the CI gate.** The same command a developer runs locally is the one that runs in Actions. No bash-wrapper drift.
 
